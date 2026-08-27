@@ -21,3 +21,23 @@ All notable changes to this project are documented here. The format follows
   and alignment, with `--json` for machine use.
 - The original chat prototype preserved under `docs/prototype/` as reference,
   and the ladycat track under `examples/ladycat/` as the real-world test case.
+- Vocal separation with demucs (`htdemucs`), cached on disk under a hash of the
+  audio contents so a rename or a move still hits the same entry.
+- Energy-based voice activity detection over the isolated vocal stem, with an
+  absolute noise floor so an instrumental is not reported as wall-to-wall
+  singing.
+- Forced alignment with `torchaudio`'s MMS_FA, using the star token between
+  every pair of words so instrumental breaks and ad-libs have somewhere to go
+  instead of stretching the next lyric across them. The acoustic model runs on
+  the Apple GPU; the Viterbi pass falls back to the CPU, which is the only
+  device `forced_align` implements.
+- Overlapped, trimmed chunking of the acoustic model so a three-minute track
+  does not need a quadratic attention matrix, and so chunk boundaries do not
+  shift every timing after them.
+- Per-line confidence scoring and suspicious-line flags — smeared, crammed,
+  internal gap, outside the vocal, overlapping the next line — with the score
+  check taken relative to the track's own median rather than an absolute
+  threshold that sung audio would fail everywhere.
+- `examples/ladycat/README.md` documenting what the reference track exercises,
+  including the chorus where the recording has one more repeat than the written
+  lyrics.

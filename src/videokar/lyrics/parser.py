@@ -107,7 +107,16 @@ class ParsedLyrics:
     @property
     def alignable_words(self) -> list[str]:
         """Flat transcript handed to the aligner, in singing order."""
-        return [t.norm for line in self.lines for t in line.alignable_tokens if t.norm]
+        return [word for group in self.word_groups for word in group]
+
+    @property
+    def word_groups(self) -> list[list[str]]:
+        """One group of aligner words per line, in singing order.
+
+        Lines with nothing alignable still produce an empty group, so a group
+        index is always a line index.
+        """
+        return [[t.norm for t in line.alignable_tokens if t.norm] for line in self.lines]
 
     def iter_tokens(self) -> Iterator[tuple[ParsedLine, Token]]:
         for line in self.lines:

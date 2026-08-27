@@ -79,6 +79,38 @@ alignment. Digits are spelled out in English, so `7` matches a sung "seven".
 More commands land with their pipeline stage: `align`, `check`, `fix`,
 `render`, `preview`, `build`, `transcribe`, `config`, `cache`.
 
+## When the alignment is wrong
+
+It sometimes will be. A forced aligner has to place every word somewhere, so
+lyrics that do not quite match the recording — a repeat Suno sang but did not
+write down, an ad-lib, a line that never made the final mix — come back as
+confident-looking nonsense rather than an error.
+
+videokar scores every line and flags the ones whose *shape* does not look like
+singing: words smeared across an instrumental break, a line crammed into no
+time at all, a long silence mid-phrase, words placed where the vocal stem says
+nobody is singing. Raw model scores are not usable as an absolute threshold on
+sung audio — the median per-character probability on a real track sits near 0.2
+— so the score check is relative to the track's own median and the structural
+checks carry most of the weight.
+
+The workflow that follows from this is deliberate: align once, look at what got
+flagged, correct it with `fix`, and re-render without re-aligning.
+
+## Devices
+
+On Apple Silicon the acoustic models run on the GPU and the Viterbi pass does
+not: `torchaudio`'s `forced_align` has no MPS kernel, so it always falls back to
+the CPU. videokar splits the work accordingly instead of making you pick. Pass
+`--device cpu` to force everything onto the CPU.
+
+## Cache
+
+Separation is the expensive stage and depends only on the audio, so the isolated
+vocal is cached under `~/Library/Caches/videokar/` keyed by a hash of the file
+contents — rename or move the track and it still hits. Override the location
+with `VIDEOKAR_CACHE_DIR`.
+
 ```bash
 videokar lyrics examples/ladycat/lyrics.txt
 videokar lyrics examples/ladycat/lyrics.txt --json
