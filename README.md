@@ -84,9 +84,40 @@ alignment. Digits are spelled out in English, so `7` matches a sung "seven".
 | `videokar align AUDIO --lyrics FILE` | separate, align, and write the pivot JSON |
 | `videokar check SONG.json` | list the lines worth a second look |
 | `videokar render SONG.json` | draw the overlay and encode it |
+| `videokar fix SONG.json ...` | correct timings by hand |
 
-More commands land with their pipeline stage: `fix`, `preview`, `build`,
-`transcribe`, `config`, `cache`.
+More commands land with their pipeline stage: `preview`, `build`, `transcribe`,
+`config`, `cache`.
+
+## Fixing a drifting block
+
+Alignment on sung audio drifts in blocks, not in single words: a whole chorus
+lands three seconds early while the lines on either side are right. So `fix`
+moves a line and carries the lines after it — but stops at the next line you
+have **pinned**, because a plain forward ripple would push the already-correct
+lines out of place to rescue the wrong ones.
+
+```bash
+videokar fix list song.json --flagged      # which lines, and their ids
+videokar fix pin  song.json -l l13 -l l14  # these two are right: do not move them
+videokar fix shift song.json --line l11 --to 56.30
+videokar fix stretch song.json --from l9 --to l10 --start 50.1 --end 56.2
+videokar check song.json
+videokar render song.json -o overlay.mov   # no re-alignment
+```
+
+| operation | what it does |
+| --- | --- |
+| `list` | line ids, timings, pins and flags |
+| `shift --line L --by ±S` / `--to T` | move a line, rippling up to the next pin |
+| `stretch --from A --to B --start S --end E` | fit a run of lines into an exact span |
+| `word --id L.wN --by ±S` / `--to T` | move one word, leaving its neighbours |
+| `pin --line L` | declare a timing correct; `--undo` to release it |
+| `mute --line L` | keep a line in the file but out of the video |
+
+Every operation refuses an edit that would invert the timeline rather than
+writing it, `--dry-run` shows the result without saving, and edited words are
+marked `manual` so a re-align leaves them alone.
 
 ```bash
 videokar align song.mp3 --lyrics song.txt -o song.json

@@ -63,6 +63,11 @@ All notable changes to this project are documented here. The format follows
   video carries no framing, so a mismatched frame would have produced a torn
   video rather than an error.
 
+- `videokar fix` — hand correction of timings, with the ripple stopping at
+  pinned lines: `list`, `shift`, `stretch`, `word`, `pin` and `mute`, each with
+  `--dry-run`. Edited words are marked `manual`, and any edit that would invert
+  the timeline is refused with the conflict named rather than written.
+
 ### Fixed
 
 - Lines vanished before their last word was sung. The exit time was clamped to
