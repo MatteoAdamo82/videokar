@@ -74,6 +74,10 @@
               text-align: center; font: 12px ui-sans-serif, sans-serif; padding: 0 4px; }
   #playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--ball);
               pointer-events: none; z-index: 3; }
+  #loopband { position: absolute; top: 0; bottom: 0; background: #6f8bff14;
+              border-left: 1px solid #6f8bff66; border-right: 1px solid #6f8bff66;
+              pointer-events: none; display: none; }
+  button.on { background: #6f8bff33; border-color: #6f8bff; color: #fff; }
   /* Fixed to the window, not the track: pinned to the track it scrolled out of
      sight the moment you looked at anything past the intro. */
   #hint { position: fixed; bottom: 10px; left: 282px; right: 14px; color: var(--dim);
@@ -83,6 +87,7 @@
 <header>
   <button id="play">▶︎ Play</button>
   <span class="time" id="clock">0:00.00 / 0:00.00</span>
+  <button id="loop">↻ Loop</button>
   <label class="speed">speed
     <select id="speed">
       <option value="0.25">0.25×</option>
@@ -102,8 +107,9 @@
   <div id="scroll">
     <div id="track">
       <canvas id="wave"></canvas>
-      <div id="hint">drag a line to move it (later lines follow, up to a pin) · drag a word to nudge it, or its edge to change how long it lasts · double-click a word to retype it · [ and ] slow the song down and speed it back up</div>
+      <div id="hint">drag a line to move it (later lines follow, up to a pin) · drag a word to nudge it, or its edge to change how long it lasts · double-click a word to retype it · [ and ] slow the song down and speed it back up · l loops the selected line</div>
       <div id="lines"></div>
+      <div id="loopband"></div>
       <div id="playhead"></div>
     </div>
   </div>
@@ -117,7 +123,18 @@ const audio = $("#audio"), scroll = $("#scroll"), track = $("#track"),
       linesEl = $("#lines"), head = $("#playhead"), wave = $("#wave"), side = $("#side");
 
 let state = null, peaks = null, pps = 110, duration = 0, selected = null, follow = true;
-let undoDepth = 0;
+let undoDepth = 0, loopOn = false;
+
+// Enough run-up to hear the beat the first word lands on, and enough tail not to
+// clip the last one before it comes round again.
+const LOOP_LEAD = 0.6, LOOP_TAIL = 0.4;
+
+function loopBounds() {
+  if (!loopOn || !selected) return null;
+  const line = lines().find((l) => l.id === selected);
+  if (!line || line.start == null) return null;
+  return [Math.max(0, line.start - LOOP_LEAD), line.end + LOOP_TAIL];
+}
 
 const fmt = (t) => `${Math.floor(t/60)}:${String(Math.floor(t%60)).padStart(2,"0")}.${String(Math.floor(t%1*100)).padStart(2,"0")}`;
 const say = (msg, kind="") => { const s = $("#status"); s.textContent = msg; s.className = kind; };
@@ -237,6 +254,7 @@ function render() {
     }
     linesEl.append(block);
   }
+  drawLoop();
 }
 
 const wordsText = (line) => line.words.map((w) => w.text).join(" ");
@@ -250,6 +268,15 @@ function toolButton(label, onClick) {
   return b;
 }
 
+function drawLoop() {
+  const bounds = loopBounds();
+  const band = $("#loopband");
+  if (!bounds) { band.style.display = "none"; return; }
+  band.style.display = "block";
+  band.style.left = bounds[0] * pps + "px";
+  band.style.width = (bounds[1] - bounds[0]) * pps + "px";
+}
+
 function select(id) {
   // Class toggle rather than a re-render: rebuilding the DOM on mousedown
   // detaches the element the double-click is about to land on, so retyping a
@@ -261,6 +288,7 @@ function select(id) {
   for (const row of document.querySelectorAll("#side .row")) {
     row.classList.toggle("active", row.dataset.line === id);
   }
+  drawLoop();
 }
 
 async function edit(body) {
@@ -388,6 +416,19 @@ const round = (v) => Math.round(v * 1000) / 1000;
 // ---- transport ------------------------------------------------------------
 function seek(t) { audio.currentTime = Math.max(0, t); tick(); }
 
+$("#loop").onclick = () => {
+  loopOn = !loopOn;
+  $("#loop").classList.toggle("on", loopOn);
+  drawLoop();
+  const bounds = loopBounds();
+  if (loopOn && !bounds) {
+    say("pick a line first — loop repeats the selected one", "bad");
+  } else if (bounds) {
+    seek(bounds[0]);
+    say(`looping ${selected} at ${audio.playbackRate}×`);
+  }
+};
+
 $("#speed").onchange = () => setRate(parseFloat($("#speed").value));
 
 function setRate(rate) {
@@ -416,6 +457,7 @@ window.addEventListener("keydown", (event) => {
   if (event.key === "ArrowLeft") seek(audio.currentTime - (event.shiftKey ? 5 : 1));
   if (event.key === "ArrowRight") seek(audio.currentTime + (event.shiftKey ? 5 : 1));
   // Step through the speeds without reaching for the menu.
+  if (event.key === "l") { $("#loop").click(); }
   if (event.key === "[" || event.key === "]") {
     const rates = [0.25, 0.5, 0.75, 1];
     const at = rates.indexOf(audio.playbackRate);
@@ -447,6 +489,10 @@ function setZoom(value) {
 
 function tick() {
   const t = audio.currentTime;
+  const bounds = loopBounds();
+  // Only the far edge is enforced. Scrubbing to somewhere before the loop is a
+  // deliberate act — playback runs into the region and starts repeating there.
+  if (bounds && !audio.paused && t >= bounds[1]) audio.currentTime = bounds[0];
   head.style.left = t * pps + "px";
   $("#clock").textContent = `${fmt(t)} / ${fmt(duration)}`;
   for (const el of document.querySelectorAll(".word")) {

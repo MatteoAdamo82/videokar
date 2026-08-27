@@ -73,6 +73,9 @@ All notable changes to this project are documented here. The format follows
   mute, playback with live highlighting, and undo. Every edit goes through the
   same operations as `videokar fix`, so the anchor rules and the guards against
   inverting the timeline are shared rather than reimplemented.
+- Loop the selected line in the sync view, shown as a band over the waveform.
+  Together with the speed control this is the loop you actually work in: run one
+  line at half speed until the ball lands where it should.
 - Playback speed in the sync view: 0.25× to 1×, from the header or with `[` and
   `]`, with pitch correction so slowed words stay intelligible.
 - Word blocks in the sync view can be resized from either edge, so a held or a
