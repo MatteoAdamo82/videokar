@@ -98,6 +98,13 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- `check` kept flagging lines the user had already pinned. A low score is the
+  acoustic model's opinion of its own confidence, and pinning is a person
+  overruling it; on the reference track five of eight flags sat on lines already
+  fixed by hand, hiding the three that still needed attention. Pinned lines keep
+  their score but lose that flag. The structural flags stay, since those describe
+  the shape of what is in the file rather than a guess about it.
+
 - The ball twitched on quick words. It drew one arc per word, and sung words are
   often only tens of milliseconds apart — "I" to "know" is 20ms on the reference
   track, half a frame at 25fps, with 41% of all gaps under a third of a second.

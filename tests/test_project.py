@@ -113,3 +113,19 @@ def test_a_clean_song_reports_nothing():
     report = check_song(song)
     assert report.ok
     assert report.issues == []
+
+
+def test_pinning_a_line_stops_check_nagging_about_its_score():
+    song = make_song(
+        make_line("l0", ["a", "b", "c"], 10.0, word_score=0.01),
+        make_line("l1", ["d", "e", "f"], 20.0, word_score=0.30),
+        make_line("l2", ["g", "h", "i"], 30.0, word_score=0.30),
+    )
+    assert "low_score" in check_song(song, apply=True).reports[0].flags
+
+    song.line("l0").pinned = True
+    report = check_song(song, apply=True)
+    assert report.reports[0].flags == []
+    assert song.line("l0").flags == []
+    # The score itself is still recorded — it just is not raised as a problem.
+    assert song.line("l0").score == pytest.approx(0.01)

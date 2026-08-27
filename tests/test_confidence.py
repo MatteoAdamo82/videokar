@@ -86,3 +86,42 @@ def test_empty_groups_survive_the_round_trip():
     # A line with nothing alignable produces no report but does not shift the
     # indices of the lines after it.
     assert [r.index for r in analyse(words, group_count=3)] == [0, 2]
+
+
+def test_a_line_declared_correct_keeps_its_score_but_loses_the_flag():
+    words = (
+        evenly(0, 10.0, 13.0, 6, score=0.20)
+        + evenly(1, 14.0, 17.0, 6, score=0.22)
+        + evenly(2, 18.0, 21.0, 6, score=0.01)
+    )
+    noisy = analyse(words, group_count=3)
+    assert Flag.LOW_SCORE in noisy[2].flags
+
+    settled = analyse(words, group_count=3, adjudicated=[2])
+    assert settled[2].flags == []
+    assert settled[2].score == pytest.approx(0.01)
+
+
+def test_adjudicating_a_line_does_not_hide_a_real_problem():
+    # A low score is an opinion a person can overrule. A line smeared across
+    # twelve seconds is the shape of what is in the file, and still is.
+    words = evenly(0, 10.0, 22.0, 6, score=0.01) + evenly(1, 23.0, 26.0, 6, score=0.2)
+    flags = analyse(words, group_count=2, adjudicated=[0])[0].flags
+    assert Flag.LOW_SCORE not in flags
+    assert Flag.SMEARED in flags
+
+
+def test_adjudicating_one_line_leaves_the_others_flagged():
+    # Two outliers against a normal-looking track: adjudicating one must not
+    # quieten the other. (Make most of the track low and it stops being an
+    # outlier — that is the relative threshold working, not a bug.)
+    words = (
+        evenly(0, 10.0, 13.0, 6, score=0.20)
+        + evenly(1, 14.0, 17.0, 6, score=0.22)
+        + evenly(2, 18.0, 21.0, 6, score=0.19)
+        + evenly(3, 22.0, 25.0, 6, score=0.005)
+        + evenly(4, 26.0, 29.0, 6, score=0.005)
+    )
+    reports = analyse(words, group_count=5, adjudicated=[3])
+    assert reports[3].flags == []
+    assert Flag.LOW_SCORE in reports[4].flags

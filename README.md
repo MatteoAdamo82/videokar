@@ -259,6 +259,10 @@ checks carry most of the weight.
 The workflow that follows from this is deliberate: align once, look at what got
 flagged, correct it with `fix`, and re-render without re-aligning.
 
+Pinning a line drops its low-score flag. That flag is the model's opinion of its
+own confidence, and pinning is you overruling it — leaving it up would bury the
+lines still worth a look under the ones already dealt with.
+
 ## Devices
 
 On Apple Silicon the acoustic models run on the GPU and the Viterbi pass does

@@ -32,9 +32,17 @@ def word(line_id, position, text, start, end, *, score=0.3, norm=None):
     )
 
 
-def make_line(line_id, texts, start, step=0.5, **kwargs):
+def make_line(line_id, texts, start, step=0.5, word_score=0.3, **kwargs):
+    """`word_score` is the per-word confidence; kwargs go to the Line itself."""
     words = [
-        word(line_id, i, t, round(start + i * step, 3), round(start + (i + 1) * step - 0.05, 3))
+        word(
+            line_id,
+            i,
+            t,
+            round(start + i * step, 3),
+            round(start + (i + 1) * step - 0.05, 3),
+            score=word_score,
+        )
         for i, t in enumerate(texts)
     ]
     return Line(id=line_id, text=" ".join(texts), words=words, **kwargs)

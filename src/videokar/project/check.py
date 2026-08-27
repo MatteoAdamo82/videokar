@@ -78,7 +78,14 @@ def check_song(song: Song, *, apply: bool = False) -> SongReport:
 
     timings = _timings(song)
     regions = [Region(start, end) for start, end in song.vocal_regions]
-    report.reports = analyse(timings, group_count=len(lines), regions=regions)
+    report.reports = analyse(
+        timings,
+        group_count=len(lines),
+        regions=regions,
+        # A pinned line has been listened to and declared right, so the model's
+        # opinion of its own confidence is no longer news.
+        adjudicated=[index for index, line in enumerate(lines) if line.pinned],
+    )
 
     if apply:
         by_index = {r.index: r for r in report.reports}

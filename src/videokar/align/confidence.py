@@ -10,12 +10,19 @@ reference track the *median* per-character probability is around 0.19; a fixed
 "below 0.5 is bad" rule would condemn the whole song. So the score check is
 relative to the track's own median, and the structural checks below carry most
 of the weight.
+
+A line the user has pinned is one they have listened to and declared right. The
+score flag is an opinion about how sure the model was, and a person has now
+overruled it, so it is dropped for those lines — five of the eight flags on the
+reference track were on lines already fixed by hand, which is exactly the noise
+that hides the three still worth looking at. The structural flags stay: those
+describe the shape of what is in the file now, not a guess about it.
 """
 
 from __future__ import annotations
 
 import statistics
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 
@@ -96,8 +103,13 @@ def analyse(
     *,
     group_count: int,
     regions: Sequence[Region] = (),
+    adjudicated: Collection[int] = (),
 ) -> list[LineReport]:
-    """Score every line and flag the ones that do not look like singing."""
+    """Score every line and flag the ones that do not look like singing.
+
+    `adjudicated` holds the indices of lines a person has declared correct.
+    Those keep their score but lose the low-score flag.
+    """
     grouped = group_words(words, group_count)
     scores = [w.score for w in words]
     median = statistics.median(scores) if scores else 0.0
@@ -129,8 +141,9 @@ def analyse(
             )
         )
 
+    settled = set(adjudicated)
     for report, following in zip(reports, reports[1:] + [None], strict=False):
-        if report.score < score_floor:
+        if report.score < score_floor and report.index not in settled:
             report.flags.append(Flag.LOW_SCORE)
         # A two-word line is over in a moment; judging its rate says more about
         # rounding than about the alignment.
