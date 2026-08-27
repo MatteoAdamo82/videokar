@@ -1,1 +1,24 @@
 .DS_Store
+__pycache__/
+*.py[cod]
+.venv/
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Rendered output and caches
+out/
+*.mov
+*.mp4
+frames/
+
+# Example audio is the author's own track: kept locally, not distributed.
+examples/**/*.mp3
+examples/**/*.wav
+examples/**/*.aif
+examples/**/*.aiff
+examples/**/*.flac
