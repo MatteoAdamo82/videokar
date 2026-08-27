@@ -81,9 +81,53 @@ alignment. Digits are spelled out in English, so `7` matches a sung "seven".
 | command | what it does |
 | --- | --- |
 | `videokar lyrics FILE` | parse a lyrics file and show how it will reach the aligner |
+| `videokar align AUDIO --lyrics FILE` | separate, align, and write the pivot JSON |
+| `videokar check SONG.json` | list the lines worth a second look |
 
-More commands land with their pipeline stage: `align`, `check`, `fix`,
-`render`, `preview`, `build`, `transcribe`, `config`, `cache`.
+More commands land with their pipeline stage: `fix`, `render`, `preview`,
+`build`, `transcribe`, `config`, `cache`.
+
+```bash
+videokar align song.mp3 --lyrics song.txt -o song.json
+videokar check song.json
+```
+
+## The pivot format
+
+`song.json` is the document everything else works from — alignment writes it,
+`check` reads it, `fix` edits it, the renderer draws from it. It holds timing
+and structure and nothing about appearance, so restyling never costs another
+alignment run and re-aligning never loses your styling.
+
+It is meant to be edited by hand, so words and vocal regions each stay on one
+line: a word is a row you can scan, and correcting one is a one-line diff.
+
+```json
+{
+ "id": "l11", "text": "Two purrs and then she's gone",
+ "voice": "main", "direction": "higher harmony",
+ "start": 52.02, "end": 54.74, "score": 0.0143,
+ "flags": ["low_score"], "sung": true, "pinned": false,
+ "words": [
+  {"id": "l11.w0", "text": "Two", "norm": "two", "start": 52.02, "end": 52.28, "score": 0.02, "manual": false}
+ ]
+}
+```
+
+Editing rules, because alignment gets words wrong as well as times:
+
+* **The `words` list is the truth.** The renderer draws words, never `line.text`.
+  Correct a misheard word there and it is already fixed on screen.
+* `line.text` is a readable copy. Editing a word leaves it out of date; `check`
+  says so and nothing breaks.
+* `norm` is what the aligner was given, derived from `text`. Editing `text`
+  leaves it stale; `check` says so and re-aligning recomputes it.
+* `sung: false` keeps a line in the file but out of the video — for a lyric that
+  never made the recording.
+* `pinned: true` means *this timing is correct*. It exists for `fix`: shifting a
+  line carries the lines after it, but the shift stops at the next pinned line
+  and is redistributed within that span. Without anchors, correcting a drifting
+  block would push the already-correct lines after it out of place.
 
 ## When the alignment is wrong
 

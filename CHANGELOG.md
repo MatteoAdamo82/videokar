@@ -40,6 +40,17 @@ All notable changes to this project are documented here. The format follows
   threshold that sung audio would fail everywhere.
 - `examples/ladycat/README.md` documenting what the reference track exercises.
 
+- The pivot document: a JSON file holding timing and structure and nothing about
+  appearance, with stable short ids, seconds as plain numbers, and one line per
+  word so hand editing produces a readable diff. Words are authoritative over
+  `line.text` and over `norm`, both of which are treated as derived and reported
+  when they fall out of date.
+- `videokar align AUDIO --lyrics FILE` and `videokar check SONG.json`.
+- `check` recomputes line flags from the document rather than trusting what
+  alignment wrote, so it stays honest after a hand edit, and reports what hand
+  editing can break: a stale line text, a stale aligner form, a line marked sung
+  with no timings, a word that ends before it starts, lines out of order.
+
 ### Changed
 
 - Square-bracket tags are now split two ways: a tag naming a song section

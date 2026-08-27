@@ -94,3 +94,39 @@ def test_most_of_the_song_is_not_flagged(aligned):
     )
     # A checker that flags everything is as useless as one that flags nothing.
     assert sum(r.suspicious for r in reports) / len(reports) < 0.35
+
+
+def test_the_pivot_document_round_trips(aligned, tmp_path):
+    from videokar.project import build_song, check_song, load_song, save_song
+
+    song = build_song(aligned)
+    path = save_song(song, tmp_path / "ladycat.json")
+    reloaded = load_song(path)
+
+    assert reloaded == song
+    assert len(reloaded.words) == sum(len(line.tokens) for line in aligned.lyrics.lines)
+    assert len(reloaded.lines) == len(aligned.lyrics)
+    # Empty sections survive: [Soft Intro], [Instrumental], [Fade-Outro].
+    assert [s.tag for s in reloaded.sections if not s.lines] == [
+        "Soft Intro",
+        "Instrumental",
+        "Fade-Outro",
+    ]
+    # Nothing hand-edited yet, so the only findings are alignment shape.
+    assert check_song(reloaded).errors == []
+
+
+def test_word_timings_in_the_document_are_monotonic(aligned):
+    from videokar.project import build_song
+
+    timed = [w for w in build_song(aligned).words if w.timed]
+    assert all(a.end <= b.start + 1e-6 for a, b in zip(timed, timed[1:], strict=False))
+
+
+def test_a_word_the_aligner_never_saw_keeps_its_place_without_timing(aligned):
+    from videokar.project import build_song
+
+    song = build_song(aligned)
+    for line in song.lines:
+        # One drawable token per written word, timed or not.
+        assert len(line.words) == len(line.words_text.split())
