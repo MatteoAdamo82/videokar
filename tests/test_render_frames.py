@@ -139,3 +139,31 @@ def test_a_line_is_visible_while_its_first_word_is_sung():
     for cue in renderer.cues:
         assert cue.appears <= cue.line.start
         assert cue.opacity(cue.line.start, STYLE.timing.fade) == pytest.approx(1.0, abs=0.01)
+
+
+@pytest.mark.parametrize(("width", "height"), [(320, 180), (960, 540), (1920, 1080)])
+def test_the_ball_is_drawn_inside_the_frame_at_any_size(width, height):
+    from videokar.config.schema import Output, Style, TextStyle
+
+    lines = song(make_line("l0", ["one", "two", "three"], 10.0))
+    style = Style(output=Output(width=width, height=height), main=TextStyle(outline=None))
+    renderer = FrameRenderer(lines, style)
+    cue = renderer.cues[0]
+    from videokar.render.ball import ball_position
+
+    # Sampled across the line: the arc must not leave the picture at any point.
+    for step in range(20):
+        position = ball_position(10.0 + step * 0.08, cue.layout, cue.ball)
+        if position is None:
+            continue
+        assert 0 <= position.x <= width
+        assert cue.ball.radius <= position.y <= height, f"{width}x{height} at step {step}"
+
+
+def test_a_small_frame_still_fits_the_line_on_one_row():
+    from videokar.config.schema import Output, Style, TextStyle
+
+    words = ["She", "purrs", "she", "eats", "she", "stays", "a", "while"]
+    lines = song(make_line("l0", words, 10.0))
+    style = Style(output=Output(width=320, height=180), main=TextStyle(outline=None))
+    assert FrameRenderer(lines, style).cues[0].layout.rows == 1

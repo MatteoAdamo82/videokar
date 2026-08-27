@@ -191,9 +191,17 @@ command-line flags. Merging is per key rather than per section, so setting one
 colour does not quietly reset the block around it. A file can name the preset it
 builds on with `preset = "youtube"` at the top.
 
-Colours are `#rrggbb` or `#rrggbbaa`. The default font size is left unset and
-derived from the frame height, so a preset looks the same at 720p and at 4K
-without carrying a size for each — it is still one fixed size per render.
+Colours are `#rrggbb` or `#rrggbbaa`.
+
+**Every measurement defaults to a fraction of the frame**, not to a pixel count:
+font size, margins, outline width, and the ball's radius, arc and clearance. A
+preset therefore looks the same at 320x180 and at 4K, and setting any of them
+explicitly still wins. Fixed pixels were fine until the first small render — at
+320x180 the old 96px margin left 96px of usable width, wrapping every line into
+three, and the ball's arc put it eighty pixels above the top of the picture.
+
+The font size is still one fixed size per render: what scales is the default, not
+the text within a video.
 
 The settings are a typed schema, not a free-form file: `videokar config show
 --schema` prints it, bounds and choices included. That is deliberate — it is

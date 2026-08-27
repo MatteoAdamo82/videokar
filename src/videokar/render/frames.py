@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 from PIL import Image, ImageDraw
 
-from ..config.schema import RGBA, Style
+from ..config.schema import RGBA, Ball, Style, resolved_ball
 from ..project.model import Line, Song
 from .ball import ball_position
 from .layout import LineLayout, layout_line
@@ -37,6 +37,9 @@ class Cue:
     layout: LineLayout
     appears: float
     leaves: float
+    ball: Ball | None = None
+    """The ball, with its dimensions settled against this line's text size."""
+
     fade_in: float = 0.0
     fade_out: float = 0.0
 
@@ -68,6 +71,12 @@ class FrameRenderer:
         previous_leaves = float("-inf")
         for index, line in enumerate(sung):
             following = sung[index + 1] if index + 1 < len(sung) else None
+            layout = layout_line(
+                line,
+                self.style.voice_style(line.voice),
+                self.style.layout,
+                self.style.output,
+            )
 
             # Hand over to the next line somewhere between this line's last word
             # and its full hold — but never before that last word is sung. Lines
@@ -89,14 +98,10 @@ class FrameRenderer:
             cues.append(
                 Cue(
                     line=line,
-                    layout=layout_line(
-                        line,
-                        self.style.voice_style(line.voice),
-                        self.style.layout,
-                        self.style.output,
-                    ),
+                    layout=layout,
                     appears=appears,
                     leaves=leaves,
+                    ball=resolved_ball(self.style.ball, layout.size),
                     # Only fade in the room that is not being sung through.
                     fade_in=min(timing.fade, max(0.0, line.start - appears)),
                     fade_out=min(timing.fade, max(0.0, leaves - line.end)),
@@ -127,13 +132,13 @@ class FrameRenderer:
             word = placed.word
             sung = word.timed and time >= word.start
             colour = text_style.colour_on if sung else text_style.colour_off
-            if text_style.outline and text_style.outline_width > 0:
+            if text_style.outline and cue.layout.outline_width > 0:
                 draw.text(
                     (placed.x, placed.y),
                     placed.text,
                     font=cue.layout.font,
                     fill=_fade(text_style.outline, opacity),
-                    stroke_width=text_style.outline_width,
+                    stroke_width=cue.layout.outline_width,
                     stroke_fill=_fade(text_style.outline, opacity),
                 )
             draw.text(
@@ -143,7 +148,7 @@ class FrameRenderer:
                 fill=_fade(colour, opacity),
             )
 
-        ball = self.style.ball
+        ball = cue.ball
         position = ball_position(time, cue.layout, ball)
         if position is not None and ball.kind == "ball":
             radius = ball.radius

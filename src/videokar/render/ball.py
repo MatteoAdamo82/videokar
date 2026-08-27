@@ -19,7 +19,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from ..config.schema import BallStyle
+from ..config.schema import Ball
 from .layout import LineLayout, PlacedWord
 
 # How much of a long silence is spent parked on the last word before the ball
@@ -80,7 +80,7 @@ def bounce_targets(placed: list[PlacedWord], min_bounce: float) -> list[Bounce]:
     return bounces
 
 
-def _arc(start: Bounce, end: Bounce, progress: float, style: BallStyle) -> BallPosition:
+def _arc(start: Bounce, end: Bounce, progress: float, style: Ball) -> BallPosition:
     """Parabola-ish hop between two words, sine rather than a true parabola so
     it leaves and lands flat instead of stabbing at the text."""
     progress = min(max(progress, 0.0), 1.0)
@@ -91,7 +91,7 @@ def _arc(start: Bounce, end: Bounce, progress: float, style: BallStyle) -> BallP
     return BallPosition(x, base - style.gap_above_text - height)
 
 
-def ball_position(time: float, layout: LineLayout, style: BallStyle) -> BallPosition | None:
+def ball_position(time: float, layout: LineLayout, style: Ball) -> BallPosition | None:
     """Where the ball is at `time`, or None when it should not be drawn."""
     if style.kind == "none":
         return None

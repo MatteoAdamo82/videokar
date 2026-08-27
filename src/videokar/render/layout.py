@@ -18,7 +18,14 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-from ..config.schema import Layout, Output, TextStyle, resolved_size
+from ..config.schema import (
+    Layout,
+    Output,
+    TextStyle,
+    resolved_margins,
+    resolved_outline,
+    resolved_size,
+)
 from ..project.model import Line, Word
 from .fonts import resolve_font_path
 
@@ -53,6 +60,10 @@ class LineLayout:
     style: TextStyle
     words: list[PlacedWord]
     rows: int
+    size: int
+    """The font size actually used, after any wrap-or-shrink decision."""
+
+    outline_width: int
 
     def placed(self, word_id: str) -> PlacedWord | None:
         for placed in self.words:
@@ -85,7 +96,8 @@ def _wrap(words: list[str], font: ImageFont.FreeTypeFont, limit: float) -> list[
 def layout_line(line: Line, style: TextStyle, layout: Layout, output: Output) -> LineLayout:
     """Place every word of a line inside the safe area."""
     font_path = resolve_font_path(style.font)
-    inset_x = int(output.width * layout.safe_area) + layout.margin_x
+    margin_x, margin_y = resolved_margins(layout, output)
+    inset_x = int(output.width * layout.safe_area) + margin_x
     limit = output.width - 2 * inset_x
 
     texts = [word.text for word in line.words]
@@ -108,11 +120,11 @@ def layout_line(line: Line, style: TextStyle, layout: Layout, output: Output) ->
 
     inset_y = int(output.height * layout.safe_area)
     if layout.anchor == "top":
-        top = inset_y + layout.margin_y
+        top = inset_y + margin_y
     elif layout.anchor == "center":
         top = (output.height - block_height) / 2
     else:
-        top = output.height - inset_y - layout.margin_y - block_height
+        top = output.height - inset_y - margin_y - block_height
 
     space = _advance(font, " ")
     placed: list[PlacedWord] = []
@@ -134,4 +146,12 @@ def layout_line(line: Line, style: TextStyle, layout: Layout, output: Output) ->
             )
             x += widths[offset] + space
 
-    return LineLayout(line=line, font=font, style=style, words=placed, rows=len(rows))
+    return LineLayout(
+        line=line,
+        font=font,
+        style=style,
+        words=placed,
+        rows=len(rows),
+        size=size,
+        outline_width=resolved_outline(style, size),
+    )

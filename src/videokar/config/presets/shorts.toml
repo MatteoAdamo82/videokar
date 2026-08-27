@@ -16,8 +16,3 @@ safe_area = 0.08
 
 [main]
 size = 76
-outline_width = 4
-
-[ball]
-radius = 20
-jump_height = 80.0

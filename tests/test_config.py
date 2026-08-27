@@ -2,6 +2,7 @@ import pytest
 
 from videokar.config import (
     ConfigError,
+    Layout,
     Output,
     Style,
     TextStyle,
@@ -144,3 +145,67 @@ def test_an_explicit_size_survives_but_the_default_follows_the_frame():
     assert Style(main=TextStyle(size=99)).resolved_size(TextStyle(size=99)) == 99
     tall = Style(output=Output(width=1080, height=1920))
     assert tall.resolved_size(tall.main) == 113
+
+
+@pytest.mark.parametrize(("width", "height"), [(320, 180), (1280, 720), (1920, 1080), (3840, 2160)])
+def test_the_geometry_follows_the_frame(width, height):
+    from videokar.config.schema import resolved_ball, resolved_margins, resolved_size
+
+    style = Style(output=Output(width=width, height=height))
+    size = resolved_size(style.main, style.output)
+    margin_x, margin_y = resolved_margins(style.layout, style.output)
+    ball = resolved_ball(style.ball, size)
+
+    # Margins have to leave most of the frame to write in. At 320x180 the fixed
+    # 96px margin left 96px of usable width and wrapped every line into three.
+    assert width - 2 * margin_x > width * 0.6
+    assert margin_y < height * 0.2
+    # And the ball has to fit above the text rather than fly off the top.
+    assert ball.gap_above_text + ball.jump_height < height * 0.25
+    assert 2 * ball.radius < size * 0.8
+
+
+def test_the_ball_stays_in_frame_at_a_small_size():
+    from videokar.config.schema import resolved_ball, resolved_margins, resolved_size
+    from videokar.project import load_song  # noqa: F401
+
+    style = Style(output=Output(width=320, height=180))
+    size = resolved_size(style.main, style.output)
+    _, margin_y = resolved_margins(style.layout, style.output)
+    ball = resolved_ball(style.ball, size)
+    text_top = 180 - round(180 * style.layout.safe_area) - margin_y - size * 1.15
+    assert text_top - ball.gap_above_text - ball.jump_height - ball.radius > 0
+
+
+def test_explicit_geometry_still_wins():
+    from videokar.config.schema import BallStyle, resolved_ball, resolved_margins
+
+    style = Style(
+        output=Output(width=320, height=180),
+        layout=Layout(margin_x=11, margin_y=13),
+        ball=BallStyle(radius=7, jump_height=5.0, gap_above_text=3.0),
+    )
+    assert resolved_margins(style.layout, style.output) == (11, 13)
+    ball = resolved_ball(style.ball, 12)
+    assert (ball.radius, ball.jump_height, ball.gap_above_text) == (7, 5.0, 3.0)
+
+
+def test_the_outline_scales_with_the_text():
+    from videokar.config.schema import resolved_outline
+
+    assert resolved_outline(TextStyle(), 64) == 3
+    # A 3px outline on a 12px font is a blot, not an outline.
+    assert resolved_outline(TextStyle(), 12) == 1
+    assert resolved_outline(TextStyle(outline_width=9), 12) == 9
+
+
+def test_a_default_render_at_1080p_is_unchanged():
+    # The ratios were read off values tuned by eye there, so that frame must
+    # come out exactly as it did before they became ratios.
+    from videokar.config.schema import resolved_ball, resolved_margins, resolved_size
+
+    style = Style()
+    size = resolved_size(style.main, style.output)
+    assert (size, resolved_margins(style.layout, style.output)) == (64, (96, 120))
+    ball = resolved_ball(style.ball, size)
+    assert (ball.radius, round(ball.jump_height), round(ball.gap_above_text)) == (16, 62, 26)

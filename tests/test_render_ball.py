@@ -1,14 +1,16 @@
 import pytest
 
 from conftest import make_line, make_song
-from videokar.config.schema import BallStyle, Layout, Output, TextStyle
+from videokar.config.schema import BallStyle, Layout, Output, TextStyle, resolved_ball
 from videokar.render.ball import ball_position, bounce_targets
 from videokar.render.layout import layout_line
 
 OUTPUT = Output(width=1000, height=600)
 LAYOUT = Layout(anchor="bottom", margin_x=0, margin_y=50, safe_area=0.0)
 TEXT = TextStyle(size=40, outline=None)
-BALL = BallStyle(lead_in=1.0, jump_height=60.0, gap_above_text=20.0, hide_after=2.0)
+BALL = resolved_ball(
+    BallStyle(lead_in=1.0, jump_height=60.0, gap_above_text=20.0, hide_after=2.0), 40
+)
 
 
 def lay(line):
@@ -93,7 +95,7 @@ def test_a_short_gap_keeps_the_ball_travelling():
 
 def test_no_ball_when_it_is_turned_off():
     layout = lay(three_words())
-    assert ball_position(10.5, layout, BallStyle(kind="none")) is None
+    assert ball_position(10.5, layout, resolved_ball(BallStyle(kind="none"), 40)) is None
 
 
 def test_no_ball_for_a_line_with_no_timings():

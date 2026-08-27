@@ -14,6 +14,7 @@ rather than a free string.
 
 from __future__ import annotations
 
+import dataclasses
 import re
 from dataclasses import field
 from typing import Annotated, Literal
@@ -85,7 +86,12 @@ class TextStyle:
     outline: RGBA | None = Field(
         default=(0, 0, 0, 210), description="Outline colour, or empty for none."
     )
-    outline_width: int = Field(default=3, ge=0, le=40)
+    outline_width: int | None = Field(
+        default=None,
+        ge=0,
+        le=40,
+        description="Empty scales it with the text: a 3px outline on a 12px font is a blot.",
+    )
     line_spacing: float = Field(default=1.15, gt=0.5, le=3.0)
     min_scale: float = Field(
         default=1.0,
@@ -103,14 +109,22 @@ class BallStyle:
     """The thing that bounces."""
 
     kind: BallKind = "ball"
-    radius: int = Field(default=16, ge=1, le=200)
+    radius: int | None = Field(
+        default=None, ge=1, le=200, description="Empty scales it with the text."
+    )
     colour: RGBA = (255, 120, 70, 255)
     sprite: str | None = Field(
         default=None, description="PNG with alpha, used when kind is 'sprite'."
     )
     sprite_scale: float = Field(default=1.0, gt=0.0, le=10.0)
-    jump_height: float = Field(
-        default=62.0, ge=0.0, le=1000.0, description="Peak of the arc above the text, in pixels."
+    jump_height: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1000.0,
+        description=(
+            "Peak of the arc above the text, in pixels. Empty is about one line high, "
+            "which keeps the ball in frame at any size."
+        ),
     )
     min_bounce: float = Field(
         default=0.35,
@@ -122,7 +136,9 @@ class BallStyle:
             "arc in that time is a twitch rather than a bounce."
         ),
     )
-    gap_above_text: float = Field(default=26.0, ge=0.0, le=500.0)
+    gap_above_text: float | None = Field(
+        default=None, ge=0.0, le=500.0, description="Empty scales it with the text."
+    )
     lead_in: float = Field(
         default=1.2, ge=0.0, le=10.0, description="Seconds of run-up before the first word."
     )
@@ -137,8 +153,12 @@ class BallStyle:
 @dataclass(frozen=True)
 class Layout:
     anchor: Anchor = "bottom"
-    margin_x: int = Field(default=96, ge=0, le=2000)
-    margin_y: int = Field(default=120, ge=0, le=2000)
+    margin_x: int | None = Field(
+        default=None, ge=0, le=2000, description="Empty is a twentieth of the frame width."
+    )
+    margin_y: int | None = Field(
+        default=None, ge=0, le=2000, description="Empty is a ninth of the frame height."
+    )
     safe_area: float = Field(
         default=0.05,
         ge=0.0,
@@ -179,6 +199,19 @@ class Output:
     audio: bool = Field(default=True, description="Mux the original audio into the result.")
 
 
+# Ratios read off the values that were tuned by eye at 1920x1080, so a default
+# render there is unchanged and every other size now follows it. Absolute pixels
+# were fine until the first small frame: at 320x180 the margins alone left 96
+# pixels of usable width, and the ball's arc put it eighty pixels above the top
+# of the picture.
+_MARGIN_X = 0.05
+_MARGIN_Y = 1 / 9
+_OUTLINE = 1 / 21
+_BALL_RADIUS = 0.25
+_BALL_JUMP = 0.97
+_BALL_GAP = 0.41
+
+
 def resolved_size(text: TextStyle, output: Output) -> int:
     """The font size actually used: explicit, or derived from the frame height.
 
@@ -189,6 +222,67 @@ def resolved_size(text: TextStyle, output: Output) -> int:
     if text.size is not None:
         return text.size
     return max(12, round(output.height / 17))
+
+
+def resolved_margins(layout: Layout, output: Output) -> tuple[int, int]:
+    """Margins in pixels: explicit, or a fraction of the frame."""
+    return (
+        layout.margin_x if layout.margin_x is not None else round(output.width * _MARGIN_X),
+        layout.margin_y if layout.margin_y is not None else round(output.height * _MARGIN_Y),
+    )
+
+
+def resolved_outline(text: TextStyle, size: int) -> int:
+    if text.outline_width is not None:
+        return text.outline_width
+    return max(1, round(size * _OUTLINE))
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class Ball:
+    """A BallStyle with every dimension settled into pixels.
+
+    A separate type from BallStyle on purpose: the configured one has optional
+    sizes meaning "work it out from the text", and doing arithmetic on those
+    is a None away from a crash. Anything that draws takes this.
+    """
+
+    kind: BallKind
+    colour: RGBA
+    radius: int
+    jump_height: float
+    gap_above_text: float
+    min_bounce: float
+    lead_in: float
+    hide_after: float
+    sprite: str | None = None
+    sprite_scale: float = 1.0
+
+
+def resolved_ball(ball: BallStyle, size: int) -> Ball:
+    """Settle a ball's dimensions against the text size.
+
+    Against the text rather than the frame: the ball has to look right next to
+    the words it is bouncing on, and those already follow the frame.
+    """
+    return Ball(
+        kind=ball.kind,
+        colour=ball.colour,
+        radius=ball.radius if ball.radius is not None else max(2, round(size * _BALL_RADIUS)),
+        jump_height=(
+            ball.jump_height if ball.jump_height is not None else round(size * _BALL_JUMP, 1)
+        ),
+        gap_above_text=(
+            ball.gap_above_text
+            if ball.gap_above_text is not None
+            else round(size * _BALL_GAP, 1)
+        ),
+        min_bounce=ball.min_bounce,
+        lead_in=ball.lead_in,
+        hide_after=ball.hide_after,
+        sprite=ball.sprite,
+        sprite_scale=ball.sprite_scale,
+    )
 
 
 @dataclass(frozen=True)

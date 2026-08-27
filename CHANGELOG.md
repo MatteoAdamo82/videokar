@@ -105,6 +105,17 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- Rendering at anything much smaller than 1080p was broken. Font size followed
+  the frame height but margins, outline width and the ball's radius, arc and
+  clearance were fixed pixel counts tuned at 1080p, so at 320x180 the margins
+  left 96 pixels of usable width, the vertical margin pushed bottom-anchored
+  text to the top, and the ball's arc placed it eighty pixels above the picture
+  — no bounce visible at all. Every measurement now defaults to a fraction of
+  the frame, with explicit values still winning, and a default 1080p render is
+  unchanged.
+- The resolved ball is now a distinct type from the configured one, so
+  arithmetic on an unresolved dimension cannot compile past review.
+
 - The download link in the sync view could save an error page as the video.
   It pointed at the job that produced the file, and jobs live in memory, so a
   server restart turned the link into a 404 whose JSON body `<a download>` then
