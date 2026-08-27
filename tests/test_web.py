@@ -265,6 +265,35 @@ def test_an_upload_starts_a_job_and_keeps_the_file(client, tmp_path):
     assert job["document"].endswith("my-song.json")
 
 
+def test_a_rendered_file_is_served_by_name(client, tmp_path):
+    (tmp_path / "song.mov").write_bytes(b"not really a movie")
+    response = client.get("/api/output/song.mov")
+    assert response.status_code == 200
+    assert response.headers["content-disposition"].endswith('filename="song.mov"')
+
+
+def test_head_on_an_output_is_answered_rather_than_refused(client, tmp_path):
+    # A 405 carries a JSON body, and <a download> would save that as the video.
+    (tmp_path / "song.mov").write_bytes(b"not really a movie")
+    assert client.head("/api/output/song.mov").status_code == 200
+
+
+def test_an_output_that_is_gone_says_so(client):
+    response = client.get("/api/output/song.mov")
+    assert response.status_code == 404
+    assert "not there any more" in response.json()["detail"]
+
+
+def test_an_output_name_cannot_walk_out_of_the_folder(client):
+    assert client.get("/api/output/..%2F..%2Fetc%2Fpasswd").status_code in (403, 404)
+    assert client.get("/api/output/sub%2Fthing.mov").status_code in (403, 404)
+
+
+def test_a_render_job_names_the_file_it_will_produce(client):
+    job = client.post("/api/render", json={"preset": "alpha"}).json()
+    assert job["file"] == "song.mov"
+
+
 def test_a_job_that_fails_reports_why_rather_than_crashing(client, tmp_path):
     # Thirty-two zero bytes is not an mp3, so ffprobe will refuse it.
     job = client.post(
@@ -279,7 +308,6 @@ def test_a_job_that_fails_reports_why_rather_than_crashing(client, tmp_path):
         time.sleep(0.05)
     assert state["status"] == "failed"
     assert state["error"]
-    assert client.get(f"/api/jobs/{job['id']}/file").status_code == 404
 
 
 def test_an_unknown_job_is_a_404(client):

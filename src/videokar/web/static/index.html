@@ -474,6 +474,15 @@ function closeSheet() {
 }
 veil.onclick = (event) => { if (event.target === veil) closeSheet(); };
 
+// Delegated from the sheet, which outlives the job panel inside it: attaching
+// per job meant a link stopped working as soon as anything redrew around it.
+sheet.onclick = async (event) => {
+  const link = event.target.closest("a.dl");
+  if (!link) return;
+  event.preventDefault();
+  await saveOutput(link.dataset.file);
+};
+
 function openSheet(html) {
   sheet.innerHTML = html;
   veil.classList.add("open");
@@ -606,8 +615,8 @@ function watchJob(job, onFinish) {
       <div class="job ${state.status}">
         <div><b>${esc(state.label)}</b> — ${esc(state.error || state.message || state.status)}</div>
         ${pct === null ? "" : `<div class="bar"><i style="width:${pct}%"></i></div>`}
-        ${state.status === "done" && state.result
-          ? `<p><a class="dl" href="/api/jobs/${state.id}/file" download>download ${esc(state.result)}</a></p>`
+        ${state.status === "done" && state.file
+          ? `<p><a class="dl" href="#" data-file="${esc(state.file)}">download ${esc(state.file)}</a></p>`
           : ""}
       </div>`;
   };
@@ -625,6 +634,28 @@ function watchJob(job, onFinish) {
       if (onFinish) onFinish({...job, ...state});
     }
   }, 700);
+}
+
+async function saveOutput(name) {
+  const url = "/api/output/" + encodeURIComponent(name);
+  // Ask for one byte first. A plain <a download> saves whatever comes back,
+  // so an error page ends up on disk as a file named like the video.
+  try {
+    const probe = await fetch(url, {headers: {Range: "bytes=0-0"}});
+    if (!probe.ok && probe.status !== 206) {
+      let detail = probe.statusText;
+      try { detail = (await probe.json()).detail || detail; } catch {}
+      throw new Error(detail);
+    }
+  } catch (err) {
+    say(err.message, "bad");
+    return;
+  }
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name;
+  link.click();
+  say(`saving ${name}`, "good");
 }
 
 function adopt(result) {

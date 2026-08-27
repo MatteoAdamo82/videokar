@@ -105,6 +105,12 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- The download link in the sync view could save an error page as the video.
+  It pointed at the job that produced the file, and jobs live in memory, so a
+  server restart turned the link into a 404 whose JSON body `<a download>` then
+  wrote to disk. Rendered files are now served by name from the working
+  directory, which outlives the job, HEAD is answered rather than refused with
+  a JSON 405, and the page checks the response before saving anything.
 - Clicking a line in the sync view moved the clock but not the view, so while
   paused it looked as though nothing had happened. Seeking now brings the
   timeline with it.

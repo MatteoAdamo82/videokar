@@ -328,6 +328,7 @@ def create_app(
 
         job = session.jobs.start("render", destination.name, work)
         job.extra["format"] = style.output.format
+        job.extra["file"] = destination.name
         return job.as_dict()
 
     @app.get("/api/jobs")
@@ -341,12 +342,22 @@ def create_app(
             raise HTTPException(404, "no such job")
         return job.as_dict()
 
-    @app.get("/api/jobs/{job_id}/file")
-    def download(job_id: str) -> Any:
-        job = session.jobs.get(job_id)
-        if job is None or job.result is None or not job.result.exists():
-            raise HTTPException(404, "that job has produced nothing to download")
-        return FileResponse(job.result, filename=job.result.name)
+    @app.api_route("/api/output/{name}", methods=["GET", "HEAD"])
+    def download(name: str) -> Any:
+        """Serve a rendered file by name, from the working directory only.
+
+        By name rather than by job id: jobs live in memory, so a link keyed on
+        one dies with the server while the file it points at is still sitting on
+        disk. HEAD is answered too — a browser or a preflight asking politely
+        should not get a 405 with a JSON body, which is exactly the sort of
+        thing an <a download> will happily save as a file.
+        """
+        if name != Path(name).name:
+            raise HTTPException(403, "that is not a name in this folder")
+        path = session.workdir / name
+        if not path.is_file():
+            raise HTTPException(404, f"{name} is not there any more")
+        return FileResponse(path, filename=name)
 
     return app
 
