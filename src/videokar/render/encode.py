@@ -22,7 +22,7 @@ from tempfile import TemporaryDirectory
 from PIL import Image
 
 from ..audio.io import require_ffmpeg
-from .style import Output
+from ..config.schema import Output
 
 logger = logging.getLogger(__name__)
 

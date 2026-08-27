@@ -1,0 +1,13 @@
+# Finished 1080p video on its own background: H.264, audio muxed in.
+
+[output]
+width = 1920
+height = 1080
+fps = 25
+format = "mp4"
+background = "#12111cff"
+audio = true
+
+[layout]
+anchor = "bottom"
+margin_y = 140

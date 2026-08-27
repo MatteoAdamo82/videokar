@@ -19,8 +19,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+from ..config.schema import BallStyle
 from .layout import LineLayout, PlacedWord
-from .style import BallStyle
 
 # How much of a long silence is spent parked on the last word before the ball
 # disappears, and reappears ahead of the next one.

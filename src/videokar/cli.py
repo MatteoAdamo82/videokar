@@ -16,6 +16,7 @@ from rich.console import Console
 from rich.table import Table
 
 from . import __version__
+from .config.loader import PRESETS as PRESETS_DIR
 from .lyrics import ParsedLyrics, parse_lyrics_file
 from .lyrics.parser import LyricsError
 from .project import ProjectError, build_song, check_song, load_song, save_song
@@ -273,94 +274,103 @@ def check_cmd(
 def render_cmd(
     song_path: Annotated[Path, typer.Argument(help="Pivot JSON written by 'videokar align'.")],
     output_path: Annotated[
-        Path | None, typer.Option("--out", "-o", help="Output file [SONG.mov].")
+        Path | None, typer.Option("--out", "-o", help="Output file [SONG + format suffix].")
+    ] = None,
+    config_path: Annotated[
+        Path | None, typer.Option("--config", "-c", help="TOML written by 'videokar config init'.")
+    ] = None,
+    preset: Annotated[
+        str | None, typer.Option("--preset", help="Built-in preset to build on.")
     ] = None,
     fmt: Annotated[
-        str, typer.Option("--format", "-f", help="prores4444, mp4 or png.")
-    ] = "prores4444",
-    width: Annotated[int, typer.Option("--width")] = 1920,
-    height: Annotated[int, typer.Option("--height")] = 1080,
-    fps: Annotated[int, typer.Option("--fps")] = 25,
-    font: Annotated[
-        Path | None, typer.Option("--font", help="Font file. Defaults to a system sans.")
+        str | None, typer.Option("--format", "-f", help="prores4444, mp4 or png.")
     ] = None,
+    width: Annotated[int | None, typer.Option("--width")] = None,
+    height: Annotated[int | None, typer.Option("--height")] = None,
+    fps: Annotated[int | None, typer.Option("--fps")] = None,
+    font: Annotated[Path | None, typer.Option("--font", help="Font file.")] = None,
     font_size: Annotated[
-        int | None,
-        typer.Option("--font-size", help="Pixels. Defaults to a size that suits --height."),
+        int | None, typer.Option("--font-size", help="Pixels. Default follows --height.")
     ] = None,
     min_scale: Annotated[
-        float,
-        typer.Option(
-            "--min-scale",
-            help="Allow a too-wide line to shrink this far instead of wrapping. "
-            "1.0 keeps every line the same size.",
-        ),
-    ] = 1.0,
+        float | None,
+        typer.Option("--min-scale", help="Let a too-wide line shrink this far before wrapping."),
+    ] = None,
     audio: Annotated[
-        bool, typer.Option("--audio/--no-audio", help="Mux the original audio in.")
-    ] = True,
+        bool | None, typer.Option("--audio/--no-audio", help="Mux the original audio in.")
+    ] = None,
     opaque: Annotated[
-        bool,
-        typer.Option("--opaque", help="Black background instead of a transparent overlay."),
+        bool, typer.Option("--opaque", help="Black background instead of a transparent overlay.")
     ] = False,
     segment: Annotated[
-        float, typer.Option("--segment", help="Seconds per render segment.")
-    ] = 60.0,
+        float | None, typer.Option("--segment", help="Seconds per render segment.")
+    ] = None,
 ) -> None:
     """Draw the karaoke overlay and encode it."""
-
-    from .render import CODECS, EncodeError, FrameRenderer, Output, Style, TextStyle
+    from .config import ConfigError, resolve_style
+    from .render import CODECS, EncodeError, FontError, FrameRenderer
     from .render.encode import render_png_sequence, render_segmented
-    from .render.style import FontError
 
-    if fmt not in CODECS:
-        _fail(f"unknown format {fmt!r} — one of {', '.join(sorted(CODECS))}")
+    # Command-line flags are the last layer over presets and the file, so an
+    # unset flag has to be absent rather than a default that silently wins.
+    overrides = {
+        "output": _without_none(
+            {
+                "format": fmt,
+                "width": width,
+                "height": height,
+                "fps": fps,
+                "audio": audio,
+                "segment_seconds": segment,
+                "background": "#000000ff" if opaque else None,
+            }
+        ),
+        "main": _without_none(
+            {"font": str(font) if font else None, "size": font_size, "min_scale": min_scale}
+        ),
+    }
+
+    try:
+        style = resolve_style(config_path, preset=preset, overrides=_without_none(overrides))
+    except ConfigError as exc:
+        _fail(str(exc))
+
+    if style.output.format not in CODECS:
+        _fail(f"unknown format {style.output.format!r} — one of {', '.join(sorted(CODECS))}")
+    if style.output.format == "mp4" and style.output.background[3] < 255:
+        # H.264 has no alpha, so a transparent background would silently become
+        # black. Say so rather than surprising anyone with it.
+        console.print("[yellow]note:[/yellow] mp4 has no alpha — compositing onto black")
+        style = _with_opaque_background(style)
 
     try:
         song = load_song(song_path)
     except (OSError, ProjectError) as exc:
         _fail(str(exc))
 
-    style = Style(
-        output=Output(
-            width=width,
-            height=height,
-            fps=fps,
-            format=fmt,
-            background=(0, 0, 0, 255) if opaque or fmt == "mp4" else (0, 0, 0, 0),
-            segment_seconds=segment,
-            audio=audio,
-        ),
-        main=TextStyle(
-            font=str(font) if font else None,
-            # Tied to the frame height so the default looks the same at 720p and
-            # 4K. Fixed for the whole render either way.
-            size=font_size if font_size else max(12, round(height / 17)),
-            min_scale=min_scale,
-        ),
-    )
-
     try:
         renderer = FrameRenderer(song, style)
     except FontError as exc:
         _fail(str(exc))
-
     if not renderer.cues:
         _fail("nothing to draw — every line is unsung or untimed")
 
-    audio_file = _resolve_audio(song, song_path) if audio and fmt != "png" else None
-    if audio and fmt != "png" and audio_file is None:
+    output = style.output
+    audio_file = (
+        _resolve_audio(song, song_path) if output.audio and output.format != "png" else None
+    )
+    if output.audio and output.format != "png" and audio_file is None:
         console.print(f"[yellow]note:[/yellow] audio {song.audio.path!r} not found, rendering mute")
 
-    destination = output_path or song_path.with_suffix(CODECS[fmt].suffix or "")
-    end = song.audio.duration
-    total_frames = int(round(end * fps))
+    suffix = CODECS[output.format].suffix
+    destination = output_path or song_path.with_suffix(suffix or "")
+    total_frames = int(round(song.audio.duration * output.fps))
 
     try:
-        if fmt == "png":
+        if output.format == "png":
             with console.status(f"rendering {total_frames} frames…", spinner="dots"):
                 render_png_sequence(
-                    (renderer.frame(i / fps) for i in range(total_frames)), destination
+                    (renderer.frame(i / output.fps) for i in range(total_frames)), destination
                 )
         else:
             with console.status(f"rendering {total_frames} frames…", spinner="dots") as status:
@@ -371,9 +381,9 @@ def render_cmd(
                 render_segmented(
                     renderer.frame,
                     destination,
-                    style.output,
+                    output,
                     start=0.0,
-                    end=end,
+                    end=song.audio.duration,
                     audio_path=audio_file,
                     on_segment=progress,
                 )
@@ -383,13 +393,25 @@ def render_cmd(
     wrapped = sum(1 for cue in renderer.cues if cue.layout.rows > 1)
     console.print(
         f"[green]{total_frames}[/green] frames, {len(renderer.cues)} lines "
-        f"at {width}x{height}@{fps} → {destination}"
+        f"at {output.width}x{output.height}@{output.fps} → {destination}"
     )
     if wrapped:
         console.print(
             f"[yellow]{wrapped}[/yellow] lines were too wide and wrapped onto two rows — "
-            "use a smaller --font-size to keep them on one"
+            "use a smaller font size to keep them on one"
         )
+
+
+def _without_none(values: dict) -> dict:
+    """Drop unset keys so they do not override a preset with a default."""
+    return {k: v for k, v in values.items() if v is not None and v != {}}
+
+
+def _with_opaque_background(style):
+    from dataclasses import replace
+
+    red, green, blue, _ = style.output.background
+    return replace(style, output=replace(style.output, background=(red, green, blue, 255)))
 
 
 def _resolve_audio(song, song_path: Path) -> Path | None:
@@ -630,6 +652,83 @@ def serve_cmd(
         serve(song_path, audio_path=audio_file, vocals_path=vocals, host=host, port=port)
     except WebUnavailableError as exc:
         _fail(str(exc))
+
+
+config_app = typer.Typer(
+    name="config", help="The look of the video: presets and the file that overrides them.",
+    no_args_is_help=True,
+)
+app.add_typer(config_app)
+
+
+@config_app.command("presets")
+def config_presets() -> None:
+    """List the built-in presets."""
+    from .config import available_presets, resolve_style
+
+    table = Table(box=None, pad_edge=False)
+    table.add_column("preset", style="cyan", no_wrap=True)
+    table.add_column("size", no_wrap=True)
+    table.add_column("format", no_wrap=True)
+    table.add_column("what it is for", overflow="fold")
+    for name in available_presets():
+        style = resolve_style(preset=name)
+        blurb = (PRESETS_DIR / f"{name}.toml").read_text(encoding="utf-8").splitlines()[0]
+        table.add_row(
+            name,
+            f"{style.output.width}x{style.output.height}@{style.output.fps}",
+            style.output.format,
+            blurb.lstrip("# ").rstrip(),
+        )
+    console.print(table)
+
+
+@config_app.command("init")
+def config_init(
+    output_path: Annotated[
+        Path, typer.Option("--out", "-o", help="Where to write it.")
+    ] = Path("videokar.toml"),
+    preset: Annotated[
+        str | None, typer.Option("--preset", help="Start from a preset instead of the defaults.")
+    ] = None,
+    force: Annotated[bool, typer.Option("--force", help="Overwrite an existing file.")] = False,
+) -> None:
+    """Write a configuration file, with every setting explained in place."""
+    from .config import ConfigError, resolve_style, to_toml
+
+    if output_path.exists() and not force:
+        _fail(f"{output_path} already exists — pass --force to overwrite it")
+    try:
+        style = resolve_style(preset=preset)
+    except ConfigError as exc:
+        _fail(str(exc))
+    output_path.write_text(to_toml(style), encoding="utf-8")
+    console.print(f"wrote {output_path} — edit it, then [bold]videokar render -c {output_path}[/]")
+
+
+@config_app.command("show")
+def config_show(
+    config_path: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+    preset: Annotated[str | None, typer.Option("--preset")] = None,
+    as_json: Annotated[bool, typer.Option("--json", help="Print as JSON instead of TOML.")] = False,
+    schema: Annotated[
+        bool, typer.Option("--schema", help="Print the JSON schema of every setting.")
+    ] = False,
+) -> None:
+    """Show the configuration as it resolves, after presets and overrides."""
+    from .config import ConfigError, resolve_style, style_schema, to_dict, to_toml
+
+    if schema:
+        console.print_json(json.dumps(style_schema()))
+        return
+    try:
+        style = resolve_style(config_path, preset=preset)
+    except ConfigError as exc:
+        _fail(str(exc))
+    if as_json:
+        console.print_json(json.dumps(to_dict(style)))
+    else:
+        console.print(to_toml(style, commented=False))
 
 
 def main() -> None:

@@ -1,6 +1,7 @@
 import pytest
 from PIL import Image
 
+from videokar.config.schema import Output
 from videokar.render.encode import (
     CODECS,
     EncodeError,
@@ -10,11 +11,12 @@ from videokar.render.encode import (
     render_png_sequence,
     render_segmented,
 )
-from videokar.render.style import Output
 
 needs_ffmpeg = pytest.mark.skipif(not have_ffmpeg(), reason="ffmpeg is not on PATH")
 
-TINY = Output(width=32, height=32, fps=10, segment_seconds=0.5)
+# Segments have a one-second floor in the schema, so the window is sized to
+# produce several of them rather than the floor being lowered for a test.
+TINY = Output(width=32, height=32, fps=10, segment_seconds=1.5)
 
 
 def frame(shade: int) -> Image.Image:
@@ -70,9 +72,9 @@ def test_segments_are_concatenated_into_one_file(tmp_path):
     destination = tmp_path / "out.mov"
     seen: list[tuple[int, int]] = []
     render_segmented(
-        frame_at, destination, TINY, start=0.0, end=2.0, on_segment=lambda a, b: seen.append((a, b))
+        frame_at, destination, TINY, start=0.0, end=6.0, on_segment=lambda a, b: seen.append((a, b))
     )
-    # Two seconds at half-second segments: four parts, joined into one file.
+    # Six seconds at 1.5-second segments: four parts, joined into one file.
     assert seen == [(1, 4), (2, 4), (3, 4), (4, 4)]
     assert destination.exists() and destination.stat().st_size > 0
 

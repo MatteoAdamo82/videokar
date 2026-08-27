@@ -1,9 +1,9 @@
 import pytest
 
 from conftest import make_line, make_song
+from videokar.config.schema import BallStyle, Layout, Output, TextStyle
 from videokar.render.ball import ball_position, bounce_targets
 from videokar.render.layout import layout_line
-from videokar.render.style import BallStyle, Layout, Output, TextStyle
 
 OUTPUT = Output(width=1000, height=600)
 LAYOUT = Layout(anchor="bottom", margin_x=0, margin_y=50, safe_area=0.0)
@@ -140,7 +140,7 @@ def test_a_lower_threshold_groups_less():
 
 def test_a_wrapped_row_always_starts_a_new_bounce():
     # Landing between two rows would look like a miss, however quick the words.
-    from videokar.render.style import Layout, TextStyle
+    from videokar.config.schema import Layout, TextStyle
 
     narrow = Output(width=260, height=600)
     line = make_song(make_line("l0", ["antidisestablishment", "supercalifragilistic"], 10.0)).line(

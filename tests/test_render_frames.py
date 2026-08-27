@@ -3,8 +3,8 @@ from dataclasses import replace
 import pytest
 
 from conftest import make_line, make_song
+from videokar.config.schema import BallStyle, Layout, Output, Style, TextStyle, Timing
 from videokar.render.frames import FrameRenderer
-from videokar.render.style import BallStyle, Layout, Output, Style, TextStyle, Timing
 
 STYLE = Style(
     output=Output(width=400, height=200),

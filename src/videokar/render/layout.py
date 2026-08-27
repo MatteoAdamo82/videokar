@@ -18,8 +18,9 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
+from ..config.schema import Layout, Output, TextStyle, resolved_size
 from ..project.model import Line, Word
-from .style import Layout, Output, TextStyle, resolve_font_path
+from .fonts import resolve_font_path
 
 _MEASURE = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
 
@@ -88,14 +89,14 @@ def layout_line(line: Line, style: TextStyle, layout: Layout, output: Output) ->
     limit = output.width - 2 * inset_x
 
     texts = [word.text for word in line.words]
-    size = style.size
+    size = resolved_size(style, output)
     font = load_font(font_path, size)
     rows = _wrap(texts, font, limit)
 
     # Shrinking is off unless asked for: a line drawn smaller than the one
     # before it is more distracting than a line that takes two rows.
     if len(rows) > 1 and style.min_scale < 1.0:
-        smaller = max(int(style.size * style.min_scale), 1)
+        smaller = max(int(size * style.min_scale), 1)
         candidate = load_font(font_path, smaller)
         if len(_wrap(texts, candidate, limit)) == 1:
             size, font = smaller, candidate

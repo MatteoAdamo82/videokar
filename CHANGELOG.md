@@ -87,6 +87,15 @@ All notable changes to this project are documented here. The format follows
 - `set_word_text` recomputes the aligner form and rebuilds the line text, so a
   correction made in the view leaves nothing for `check` to report as stale.
 
+- Configuration: a typed style schema with bounds, choices and descriptions,
+  four presets (`alpha`, `youtube`, `shorts`, `minimal`), and layered resolution
+  — defaults, preset, file, command-line flags — merged per key rather than per
+  section. Colours are hex, and `videokar config init` writes a file with every
+  setting explained in place from the schema's own descriptions.
+- `videokar config presets | init | show`, with `--schema` printing the JSON
+  schema of every setting, so an editor can be generated from it rather than
+  written by hand against it.
+
 ### Fixed
 
 - The ball twitched on quick words. It drew one arc per word, and sung words are

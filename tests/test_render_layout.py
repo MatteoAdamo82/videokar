@@ -1,8 +1,8 @@
 import pytest
 
 from conftest import make_line, make_song
+from videokar.config.schema import Layout, Output, Style, TextStyle
 from videokar.render.layout import layout_line
-from videokar.render.style import Layout, Output, Style, TextStyle
 
 OUTPUT = Output(width=1000, height=600)
 LAYOUT = Layout(anchor="bottom", margin_x=0, margin_y=50, safe_area=0.0)
@@ -70,7 +70,23 @@ def test_the_safe_area_keeps_text_off_the_edges():
 
 def test_the_second_voice_is_drawn_smaller_by_default():
     style = Style()
-    assert style.voice_style("paren").size < style.voice_style("main").size
+    main = style.resolved_size(style.voice_style("main"))
+    paren = style.resolved_size(style.voice_style("paren"))
+    assert paren < main
+
+
+def test_the_default_size_follows_the_frame_height():
+    # One fixed size per render, but a preset should look the same at any
+    # resolution without carrying a size for each.
+    small = Style(output=Output(width=1280, height=720))
+    large = Style(output=Output(width=3840, height=2160))
+    assert small.resolved_size(small.main) == 42
+    assert large.resolved_size(large.main) == 127
+
+
+def test_an_explicit_size_is_left_alone():
+    style = Style(output=Output(width=1280, height=720), main=TextStyle(size=99))
+    assert style.resolved_size(style.main) == 99
 
 
 def test_an_explicit_second_voice_style_wins():

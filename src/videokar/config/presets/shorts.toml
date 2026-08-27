@@ -1,0 +1,23 @@
+# Vertical, for Shorts, Reels and TikTok. Text centred and larger, because it
+# is read on a phone at arm's length.
+
+[output]
+width = 1080
+height = 1920
+fps = 30
+format = "mp4"
+background = "#12111c"
+
+[layout]
+anchor = "center"
+margin_x = 48
+margin_y = 0
+safe_area = 0.08
+
+[main]
+size = 76
+outline_width = 4
+
+[ball]
+radius = 20
+jump_height = 80.0

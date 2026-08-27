@@ -172,3 +172,53 @@ def test_fix_mute_takes_a_line_out_without_deleting_it(tmp_path):
     runner.invoke(app, ["fix", "mute", str(path), "--line", "l1"])
     line = load_song(path).line("l1")
     assert not line.sung and line.start is None and line.words_text == "d e f"
+
+
+def test_config_presets_lists_them(tmp_path):
+    result = runner.invoke(app, ["config", "presets"])
+    assert result.exit_code == 0
+    assert "youtube" in result.stdout and "shorts" in result.stdout
+
+
+def test_config_init_writes_a_file_that_reads_back(tmp_path):
+    from videokar.config import resolve_style
+
+    path = tmp_path / "videokar.toml"
+    result = runner.invoke(app, ["config", "init", "-o", str(path), "--preset", "shorts"])
+    assert result.exit_code == 0
+    assert resolve_style(path).output.height == 1920
+
+
+def test_config_init_refuses_to_clobber(tmp_path):
+    path = tmp_path / "videokar.toml"
+    path.write_text("keep me")
+    result = runner.invoke(app, ["config", "init", "-o", str(path)])
+    assert result.exit_code == 1
+    assert path.read_text() == "keep me"
+    assert runner.invoke(app, ["config", "init", "-o", str(path), "--force"]).exit_code == 0
+
+
+def test_config_show_resolves_the_layers(tmp_path):
+    path = tmp_path / "c.toml"
+    path.write_text("[output]\nfps = 48\n")
+    result = runner.invoke(
+        app, ["config", "show", "-c", str(path), "--preset", "youtube", "--json"]
+    )
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["output"]["fps"] == 48
+    assert payload["output"]["format"] == "mp4"
+
+
+def test_config_show_can_print_the_schema():
+    result = runner.invoke(app, ["config", "show", "--schema"])
+    assert result.exit_code == 0
+    assert "$defs" in json.loads(result.stdout)
+
+
+def test_config_show_reports_a_bad_value(tmp_path):
+    path = tmp_path / "c.toml"
+    path.write_text("[layout]\nanchor = 'sideways'\n")
+    result = runner.invoke(app, ["config", "show", "-c", str(path)])
+    assert result.exit_code == 1
+    assert "layout.anchor" in result.stderr

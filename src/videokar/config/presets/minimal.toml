@@ -1,0 +1,19 @@
+# Text only: no outline, no ball, hard cuts. For a busy clip underneath where
+# anything more competes with the picture.
+
+[output]
+format = "prores4444"
+background = "#00000000"
+audio = false
+
+[timing]
+fade = 0.0
+transition = "cut"
+
+[main]
+outline_width = 0
+colour_off = "#ffffff55"
+colour_on = "#ffffffff"
+
+[ball]
+kind = "none"

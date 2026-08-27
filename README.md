@@ -86,9 +86,10 @@ alignment. Digits are spelled out in English, so `7` matches a sung "seven".
 | `videokar render SONG.json` | draw the overlay and encode it |
 | `videokar fix SONG.json ...` | correct timings by hand |
 | `videokar serve SONG.json` | the sync view, in a browser |
+| `videokar config init` | write a configuration file, explained in place |
 
 More commands land with their pipeline stage: `preview`, `build`, `transcribe`,
-`config`, `cache`.
+`cache`.
 
 ## The sync view
 
@@ -161,9 +162,34 @@ three minute track never depends on one ffmpeg process staying alive for three
 minutes. Frame times come from the absolute frame index rather than accumulating
 per segment, so a seam cannot drift the timing.
 
-Styling is currently command-line flags — `--width`, `--height`, `--fps`,
-`--font`, `--font-size`, `--min-scale`, `--opaque`. The TOML config with presets
-is the next step.
+## Configuration
+
+```bash
+videokar config presets              # what is built in
+videokar config init --preset alpha  # a file to edit, every setting explained
+videokar render song.json -c videokar.toml
+```
+
+| preset | what it is for |
+| --- | --- |
+| `alpha` | transparent ProRes 4444 overlay for an editor |
+| `youtube` | finished 1080p mp4 on its own background |
+| `shorts` | vertical 1080x1920, centred, larger text |
+| `minimal` | text only — no outline, no ball, hard cuts |
+
+Layers resolve in order: built-in defaults, then a preset, then your file, then
+command-line flags. Merging is per key rather than per section, so setting one
+colour does not quietly reset the block around it. A file can name the preset it
+builds on with `preset = "youtube"` at the top.
+
+Colours are `#rrggbb` or `#rrggbbaa`. The default font size is left unset and
+derived from the frame height, so a preset looks the same at 720p and at 4K
+without carrying a size for each — it is still one fixed size per render.
+
+The settings are a typed schema, not a free-form file: `videokar config show
+--schema` prints it, bounds and choices included. That is deliberate — it is
+what will let the sync view build its own controls from the same definitions
+rather than a hand-written form that drifts out of step.
 
 **The ball bounces on beats, not on words.** Sung words run together — on the
 reference track 41% of the gaps between words are under a third of a second and

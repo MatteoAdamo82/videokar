@@ -1,0 +1,10 @@
+# Transparent overlay for an editor. ProRes 4444 with a real alpha channel,
+# to drop straight over a clip in Final Cut or Resolve.
+
+[output]
+width = 1920
+height = 1080
+fps = 25
+format = "prores4444"
+background = "#00000000"
+audio = false

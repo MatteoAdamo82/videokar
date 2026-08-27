@@ -12,10 +12,10 @@ from dataclasses import dataclass
 
 from PIL import Image, ImageDraw
 
+from ..config.schema import RGBA, Style
 from ..project.model import Line, Song
 from .ball import ball_position
 from .layout import LineLayout, layout_line
-from .style import RGBA, Style
 
 
 def _fade(colour: RGBA, opacity: float) -> RGBA:
