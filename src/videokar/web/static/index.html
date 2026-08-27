@@ -17,6 +17,9 @@
   button:hover { background: #35324a; }
   button.primary { background: #3d5afe22; border-color: #5b6bd6; }
   .time { font-variant-numeric: tabular-nums; color: var(--dim); min-width: 108px; }
+  .speed { color: var(--dim); display: flex; align-items: center; gap: 5px; }
+  select { background: #2b293a; color: var(--ink); border: 1px solid #3a3750;
+           border-radius: 6px; padding: 4px 6px; font: inherit; }
   .grow { flex: 1; }
   #status { color: var(--dim); }
   #status.bad { color: var(--bad); }
@@ -80,6 +83,14 @@
 <header>
   <button id="play">▶︎ Play</button>
   <span class="time" id="clock">0:00.00 / 0:00.00</span>
+  <label class="speed">speed
+    <select id="speed">
+      <option value="0.25">0.25×</option>
+      <option value="0.5">0.5×</option>
+      <option value="0.75">0.75×</option>
+      <option value="1" selected>1×</option>
+    </select>
+  </label>
   <button id="zoomout">−</button><button id="zoomin">+</button>
   <button id="undo" disabled>↶ Undo</button>
   <span class="grow"></span>
@@ -91,7 +102,7 @@
   <div id="scroll">
     <div id="track">
       <canvas id="wave"></canvas>
-      <div id="hint">drag a line to move it (later lines follow, up to a pin) · drag a word to nudge it, or its edge to change how long it lasts · double-click a word to retype it</div>
+      <div id="hint">drag a line to move it (later lines follow, up to a pin) · drag a word to nudge it, or its edge to change how long it lasts · double-click a word to retype it · [ and ] slow the song down and speed it back up</div>
       <div id="lines"></div>
       <div id="playhead"></div>
     </div>
@@ -125,6 +136,7 @@ async function load() {
   state = await api("/api/song");
   duration = state.song.audio.duration;
   audio.src = "/api/audio";
+  setRate(parseFloat($("#speed").value));
   try { peaks = await api("/api/peaks"); } catch { peaks = null; }
   layout(); render();
   say(`${state.song.sections.reduce((n,s)=>n+s.lines.length,0)} lines · ${state.suspicious.length} flagged`);
@@ -376,6 +388,18 @@ const round = (v) => Math.round(v * 1000) / 1000;
 // ---- transport ------------------------------------------------------------
 function seek(t) { audio.currentTime = Math.max(0, t); tick(); }
 
+$("#speed").onchange = () => setRate(parseFloat($("#speed").value));
+
+function setRate(rate) {
+  audio.playbackRate = rate;
+  // Pitch correction is the point: half speed an octave down is harder to
+  // place a word in, not easier. The prefixed names are for older engines.
+  for (const key of ["preservesPitch", "mozPreservesPitch", "webkitPreservesPitch"]) {
+    if (key in audio) audio[key] = true;
+  }
+  $("#speed").value = String(rate);
+}
+
 $("#play").onclick = () => audio.paused ? audio.play() : audio.pause();
 audio.onplay = () => $("#play").textContent = "❚❚ Pause";
 audio.onpause = () => $("#play").textContent = "▶︎ Play";
@@ -391,6 +415,14 @@ window.addEventListener("keydown", (event) => {
   if ((event.metaKey || event.ctrlKey) && event.key === "z") { event.preventDefault(); $("#undo").click(); }
   if (event.key === "ArrowLeft") seek(audio.currentTime - (event.shiftKey ? 5 : 1));
   if (event.key === "ArrowRight") seek(audio.currentTime + (event.shiftKey ? 5 : 1));
+  // Step through the speeds without reaching for the menu.
+  if (event.key === "[" || event.key === "]") {
+    const rates = [0.25, 0.5, 0.75, 1];
+    const at = rates.indexOf(audio.playbackRate);
+    const next = at < 0 ? 3 : Math.min(rates.length - 1, Math.max(0, at + (event.key === "]" ? 1 : -1)));
+    setRate(rates[next]);
+    say(`speed ${rates[next]}×`);
+  }
 });
 
 $("#undo").onclick = async () => {
