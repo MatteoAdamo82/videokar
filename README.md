@@ -99,7 +99,8 @@ videokar serve song.json
 A local page on `127.0.0.1:8712` with the waveform of the **isolated vocal**
 behind the lines — the point being that you can see where a phrase actually
 starts instead of guessing at it. Drag a line to move it, drag a word to nudge
-it, double-click a word to retype one the aligner misheard. Space plays, arrows
+it, drag a word's left or right edge to change how long it lasts, double-click a
+word to retype one the aligner misheard. Space plays, arrows
 scrub, clicking the waveform seeks.
 
 Every edit goes through the same operations `videokar fix` uses, so pinning and

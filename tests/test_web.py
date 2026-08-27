@@ -133,3 +133,42 @@ def test_undo_restores_a_retyped_word(client):
     client.post("/api/edit", json={"op": "set_text", "word": "l1.w0", "text": "purrs"})
     client.post("/api/undo")
     assert load_song(client.song_path).word("l1.w0").text == "d"
+
+
+def test_dragging_a_word_edge_changes_how_long_it_lasts(client):
+    # l1.w0 is 20.00-20.45 and l1.w1 starts at 20.50, so 20.48 is the room there is.
+    client.post("/api/edit", json={"op": "resize_word", "word": "l1.w0", "end": 20.48})
+    word = load_song(client.song_path).word("l1.w0")
+    assert word.end == pytest.approx(20.48)
+    assert word.start == pytest.approx(20.0)
+
+
+def test_dragging_the_left_edge_moves_only_the_onset(client):
+    client.post("/api/edit", json={"op": "resize_word", "word": "l1.w1", "start": 20.46})
+    word = load_song(client.song_path).word("l1.w1")
+    assert word.start == pytest.approx(20.46)
+    assert word.end == pytest.approx(20.95)
+
+
+def test_a_word_cannot_be_resized_over_its_neighbour(client):
+    response = client.post("/api/edit", json={"op": "resize_word", "word": "l1.w0", "end": 21.4})
+    assert response.status_code == 409
+    assert "l1.w1" in response.json()["detail"]
+
+
+def test_a_word_cannot_be_resized_into_the_next_line(client):
+    # l1's last word ends at 21.45 and l2 starts at 30.0.
+    response = client.post("/api/edit", json={"op": "resize_word", "word": "l1.w2", "end": 31.0})
+    assert response.status_code == 409
+    assert "l2" in response.json()["detail"]
+
+
+def test_a_word_cannot_be_squeezed_to_nothing(client):
+    response = client.post("/api/edit", json={"op": "resize_word", "word": "l1.w0", "end": 20.01})
+    assert response.status_code == 409
+    assert "grab it again" in response.json()["detail"]
+
+
+def test_resizing_a_word_moves_the_line_edge_with_it(client):
+    client.post("/api/edit", json={"op": "resize_word", "word": "l1.w2", "end": 22.5})
+    assert load_song(client.song_path).line("l1").end == pytest.approx(22.5)

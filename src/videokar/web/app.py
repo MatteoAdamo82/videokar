@@ -26,6 +26,7 @@ from ..project.edit import (
     set_line_start,
     set_pinned,
     set_sung,
+    set_word_span,
     set_word_start,
     set_word_text,
     shift_line,
@@ -136,8 +137,10 @@ def create_app(song_path: Path, audio_path: Path | None = None, vocals_path: Pat
             # so it comes back as a message for the page rather than a 500. One
             # status for every refusal, including an id that does not exist:
             # the page shows the reason either way, and the operations disagree
-            # about which exception an unknown id raises.
-            raise HTTPException(409, str(exc).strip("'")) from exc
+            # about which exception an unknown id raises. KeyError stringifies
+            # its argument with repr, so only that one needs unwrapping.
+            detail = exc.args[0] if isinstance(exc, KeyError) else str(exc)
+            raise HTTPException(409, str(detail)) from exc
 
         history.append(before)
         del history[:-UNDO_DEPTH]
@@ -169,6 +172,8 @@ def _dispatch(song, request: EditRequest) -> Any:
         return shift_line(song, request.line, request.by or 0.0)
     if op == "move_word":
         return set_word_start(song, request.word, request.to)
+    if op == "resize_word":
+        return set_word_span(song, request.word, request.start, request.end)
     if op == "set_text":
         return set_word_text(song, request.word, request.text or "")
     if op == "pin":

@@ -54,8 +54,13 @@
   .word { position: absolute; top: 26px; height: 44px; border-radius: 5px;
           background: #322e45; border: 1px solid #443f5e; color: var(--off);
           display: flex; align-items: center; justify-content: center;
-          padding: 0 4px; cursor: ew-resize; overflow: hidden; white-space: nowrap;
+          padding: 0 6px; cursor: grab; overflow: hidden; white-space: nowrap;
           font-size: 12px; }
+  /* Grab the middle to move the word, an edge to change how long it lasts. */
+  .grip { position: absolute; top: 0; bottom: 0; width: 6px; cursor: ew-resize; }
+  .grip.l { left: -1px; } .grip.r { right: -1px; }
+  .word:hover .grip { background: #6f8bff88; }
+  .word.resizing { border-color: #6f8bff; }
   .word.sung { background: #4a3f2a; border-color: #7a6438; color: var(--on); }
   .word.manual { border-bottom: 2px solid var(--ball); }
   /* A real input rather than a contenteditable chip: focus, select-all, Enter
@@ -86,7 +91,7 @@
   <div id="scroll">
     <div id="track">
       <canvas id="wave"></canvas>
-      <div id="hint">drag a line to move it (later lines follow, up to a pin) · drag a word to nudge it · double-click a word to retype it</div>
+      <div id="hint">drag a line to move it (later lines follow, up to a pin) · drag a word to nudge it, or its edge to change how long it lasts · double-click a word to retype it</div>
       <div id="lines"></div>
       <div id="playhead"></div>
     </div>
@@ -210,6 +215,12 @@ function render() {
       el.title = `${word.text}  ${word.start.toFixed(2)}–${word.end.toFixed(2)}`;
       el.dataset.word = word.id;
       el.ondblclick = (event) => { event.stopPropagation(); retype(el, word); };
+      for (const side of ["l", "r"]) {
+        const grip = document.createElement("div");
+        grip.className = "grip " + side;
+        grip.dataset.side = side;
+        el.append(grip);
+      }
       block.append(el);
     }
     linesEl.append(block);
@@ -298,20 +309,38 @@ linesEl.addEventListener("mousedown", (event) => {
   event.preventDefault();
   const id = blockEl.dataset.line;
   select(id);
+  const grip = event.target.closest(".grip");
+  const element = wordEl || blockEl;
   drag = {
-    kind: wordEl ? "word" : "line",
+    kind: grip ? "resize" : wordEl ? "word" : "line",
+    side: grip ? grip.dataset.side : null,
     id: wordEl ? wordEl.dataset.word : id,
-    element: wordEl || blockEl,
+    element,
     originX: event.clientX,
-    startLeft: parseFloat((wordEl || blockEl).style.left),
+    startLeft: parseFloat(element.style.left),
+    startWidth: element.getBoundingClientRect().width,
     offset: 0,
   };
+  if (grip) element.classList.add("resizing");
 });
 
 window.addEventListener("mousemove", (event) => {
   if (!drag) return;
   drag.offset = (event.clientX - drag.originX) / pps;
-  drag.element.style.left = drag.startLeft + drag.offset * pps + "px";
+  const shift = drag.offset * pps;
+  if (drag.kind === "resize") {
+    // Live feedback has to stay above zero width or the element collapses and
+    // the grip disappears from under the cursor mid-drag.
+    if (drag.side === "l") {
+      const width = Math.max(6, drag.startWidth - shift);
+      drag.element.style.left = drag.startLeft + (drag.startWidth - width) + "px";
+      drag.element.style.width = width + "px";
+    } else {
+      drag.element.style.width = Math.max(6, drag.startWidth + shift) + "px";
+    }
+  } else {
+    drag.element.style.left = drag.startLeft + shift + "px";
+  }
   say(`${drag.kind} ${drag.id}: ${drag.offset >= 0 ? "+" : ""}${drag.offset.toFixed(2)}s`);
 });
 
@@ -319,17 +348,26 @@ window.addEventListener("mouseup", async () => {
   if (!drag) return;
   const moved = drag;
   drag = null;
+  moved.element.classList.remove("resizing");
   if (Math.abs(moved.offset) < 0.01) {
     // A click, not a drag. Put the element back where it was and leave the DOM
     // alone so a double-click still has something to land on.
     moved.element.style.left = moved.startLeft + "px";
+    moved.element.style.width = moved.startWidth + "px";
     return;
   }
   if (moved.kind === "line") {
     await edit({op: "shift_line", line: moved.id, by: round(moved.offset)});
   } else {
     const word = lines().flatMap((l) => l.words).find((w) => w.id === moved.id);
-    await edit({op: "move_word", word: moved.id, to: round(word.start + moved.offset)});
+    if (moved.kind === "resize") {
+      const bound = moved.side === "l"
+        ? {start: round(word.start + moved.offset)}
+        : {end: round(word.end + moved.offset)};
+      await edit({op: "resize_word", word: moved.id, ...bound});
+    } else {
+      await edit({op: "move_word", word: moved.id, to: round(word.start + moved.offset)});
+    }
   }
 });
 

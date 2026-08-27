@@ -73,6 +73,10 @@ All notable changes to this project are documented here. The format follows
   mute, playback with live highlighting, and undo. Every edit goes through the
   same operations as `videokar fix`, so the anchor rules and the guards against
   inverting the timeline are shared rather than reimplemented.
+- Word blocks in the sync view can be resized from either edge, so a held or a
+  clipped syllable can be given the length it actually has. The bound checks now
+  also look at the line on either side: a line's span comes from its words, so
+  stretching the first or last one moves the line's edge.
 - Waveform peaks computed from the vocal stem and cached beside it, one byte per
   bucket at a hundred buckets a second.
 - `set_word_text` recomputes the aligner form and rebuilds the line text, so a

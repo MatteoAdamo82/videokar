@@ -155,21 +155,53 @@ def shift_word(song: Song, word_id: str, delta: float) -> Edit:
     return set_word_start(song, word_id, round(word.start + delta, 3))
 
 
+MIN_WORD = 0.03
+"""Shortest a word may be made. Below this it is a sliver you cannot grab back."""
+
+
 def set_word_start(song: Song, word_id: str, start: float) -> Edit:
     """Put one word's onset at `start`, keeping its length."""
     word = song.word(word_id)
     if not word.timed:
         raise FixError(f"{word_id} has no timing to move")
-    line = next(ln for ln in song.lines if any(w.id == word_id for w in ln.words))
     length = word.end - word.start
-    _check_word_fits(line, word, start, start + length)
-    word.start, word.end = round(start, 3), round(start + length, 3)
+    return set_word_span(song, word_id, start, round(start + length, 3))
+
+
+def set_word_span(
+    song: Song, word_id: str, start: float | None = None, end: float | None = None
+) -> Edit:
+    """Set where a word begins and ends, changing how long it lasts.
+
+    Dragging one edge is the natural way to say "this syllable is held" or "this
+    one is clipped", so either bound can be set on its own.
+    """
+    word = song.word(word_id)
+    if not word.timed:
+        raise FixError(f"{word_id} has no timing to change")
+    new_start = round(word.start if start is None else start, 3)
+    new_end = round(word.end if end is None else end, 3)
+    if new_end - new_start < MIN_WORD:
+        raise FixError(
+            f"{word_id} would last {new_end - new_start:.3f}s — "
+            f"nothing shorter than {MIN_WORD}s, you could not grab it again"
+        )
+
+    line = next(ln for ln in song.lines if any(w.id == word_id for w in ln.words))
+    _check_word_fits(song, line, word, new_start, new_end)
+    word.start, word.end = new_start, new_end
     word.manual = True
     song.refresh_bounds()
-    return Edit([line.id], f"moved {word_id} to {start:.2f}s")
+    return Edit([line.id], f"{word_id} now {new_start:.2f}-{new_end:.2f}s")
 
 
-def _check_word_fits(line: Line, word: Word, start: float, end: float) -> None:
+def _check_word_fits(song: Song, line: Line, word: Word, start: float, end: float) -> None:
+    """Refuse anything that would overlap a neighbour, in this line or the next.
+
+    The line's own span is derived from its words, so stretching the first or
+    last word is really moving the line's edge — which has to answer to the
+    lines on either side, not just to the words beside it.
+    """
     timed = [w for w in line.words if w.timed]
     position = timed.index(word)
     if position > 0 and start < timed[position - 1].end:
@@ -181,6 +213,21 @@ def _check_word_fits(line: Line, word: Word, start: float, end: float) -> None:
         raise FixError(
             f"{word.id} would end at {end:.2f}, after {timed[position + 1].id} "
             f"starts at {timed[position + 1].start:.2f}"
+        )
+
+    lines = timed_lines(song)
+    if line not in lines:
+        return
+    index = lines.index(line)
+    if position == 0 and index > 0 and start < lines[index - 1].end:
+        raise FixError(
+            f"{word.id} would start at {start:.2f}, before {lines[index - 1].id} "
+            f"ends at {lines[index - 1].end:.2f}"
+        )
+    if position == len(timed) - 1 and index + 1 < len(lines) and end > lines[index + 1].start:
+        raise FixError(
+            f"{word.id} would end at {end:.2f}, after {lines[index + 1].id} "
+            f"starts at {lines[index + 1].start:.2f}"
         )
 
 
