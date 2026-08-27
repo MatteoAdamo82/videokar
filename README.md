@@ -62,7 +62,13 @@ Seven o'clock, she's at the door
 ```
 
 * `[Section tags]` are kept in the output and grouped over their lines, but are
-  never fed to the aligner.
+  never fed to the aligner. A tag may carry a description —
+  `[Chorus - wide, stacked harmonies]` — and a section with no lines under it,
+  like `[Instrumental]`, is kept as part of the song's shape.
+* `[higher harmony]`, `[all voices]` and other performance directions appear
+  *inside* a section. They are told apart from section tags by whether the tag
+  names a song section, and are carried on the lines that follow rather than
+  starting a new section.
 * A line wrapped entirely in round brackets is the second voice: it gets its own
   font, size, colour and position in the config. A line with brackets only in
   part of it (`(one) and (two)`) stays a normal line.

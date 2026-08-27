@@ -18,14 +18,15 @@ def test_lyrics_table(ladycat_lyrics_path):
     result = runner.invoke(app, ["lyrics", str(ladycat_lyrics_path)])
     assert result.exit_code == 0
     assert "Verse 1" in result.stdout
-    assert "35" in result.stdout
+    assert "36" in result.stdout
 
 
 def test_lyrics_json(ladycat_lyrics_path):
     result = runner.invoke(app, ["lyrics", str(ladycat_lyrics_path), "--json"])
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    assert [s["tag"] for s in payload["sections"]][0] == "Verse 1"
+    tags = [s["tag"] for s in payload["sections"]]
+    assert tags[:2] == ["Soft Intro", "Verse 1"]
 
 
 def test_missing_file_exits_nonzero(tmp_path):

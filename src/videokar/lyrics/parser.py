@@ -5,9 +5,18 @@ Input conventions, all optional:
     [Verse 1]                     section tag — kept in the output, never aligned
     Seven o'clock, she's at the door
     (she's not mine, I know)      a fully parenthesised line is the second voice
+    [higher harmony]              a performance direction, not a new section
+    I leave the bowl outside
 
 Everything else is a plain lyric line. Blank lines are ignored. Lines that
 appear before the first tag land in a leading section whose tag is None.
+
+Suno uses square brackets for two different things. `[Chorus - wide, stacked
+harmonies]` names a section; `[higher harmony]` and `[all voices]` are stage
+directions that appear *inside* one and would otherwise chop it into pieces.
+They are told apart by whether the tag mentions a song section — see
+SECTION_KEYWORDS — and a direction is carried on the lines that follow it, so
+the renderer can style them differently without the structure changing shape.
 
 The parser guarantees a 1:1 mapping between the tokens it emits and the words
 the aligner will time, which is what lets the renderer draw token *i* under
@@ -28,6 +37,27 @@ from .normalize import normalize_token
 Voice = Literal["main", "paren"]
 
 _SECTION_RE = re.compile(r"^\[\s*([^\[\]]+?)\s*\]$")
+_WORDS_RE = re.compile(r"[a-z]+")
+
+SECTION_KEYWORDS = frozenset(
+    (
+        "intro", "outro", "verse", "chorus", "prechorus", "postchorus",
+        "bridge", "hook", "refrain", "instrumental", "break", "interlude",
+        "solo", "drop", "build", "breakdown", "coda", "ending", "fade",
+        "vamp", "reprise",
+    )
+)  # fmt: skip
+"""Tags naming one of these start a new section; anything else is a direction.
+
+Deliberately a keyword match rather than an exact list: real tags read
+`[Chorus - wide, stacked harmonies, wall of guitars]`, `[Soft Intro]`,
+`[Fade-Outro]`. The trade-off is that a direction like `[guitar solo]` will be
+read as a section — rare enough, and visible in `videokar lyrics`.
+"""
+
+
+def _is_section_tag(tag: str) -> bool:
+    return any(word in SECTION_KEYWORDS for word in _WORDS_RE.findall(tag.lower()))
 
 
 def _unwrap_parens(text: str) -> str | None:
@@ -78,6 +108,9 @@ class ParsedLine:
     tokens: list[Token]
     source_line: int
     """1-based line number in the source file, for error messages."""
+
+    direction: str | None = None
+    """The performance direction in force, e.g. "higher harmony". Verbatim."""
 
     @property
     def alignable_tokens(self) -> list[Token]:
@@ -136,6 +169,7 @@ def parse_lyrics(text: str, *, language: str = "en") -> ParsedLyrics:
     text = unicodedata.normalize("NFC", text.lstrip("﻿"))
     parsed = ParsedLyrics(language=language)
     current: ParsedSection | None = None
+    direction: str | None = None
     line_index = 0
 
     for source_line, raw in enumerate(text.splitlines(), start=1):
@@ -145,8 +179,13 @@ def parse_lyrics(text: str, *, language: str = "en") -> ParsedLyrics:
 
         section_match = _SECTION_RE.match(stripped)
         if section_match:
-            current = ParsedSection(id=f"s{len(parsed.sections)}", tag=section_match.group(1))
-            parsed.sections.append(current)
+            tag = section_match.group(1)
+            if _is_section_tag(tag):
+                current = ParsedSection(id=f"s{len(parsed.sections)}", tag=tag)
+                parsed.sections.append(current)
+                direction = None
+            else:
+                direction = tag
             continue
 
         if current is None:
@@ -171,6 +210,7 @@ def parse_lyrics(text: str, *, language: str = "en") -> ParsedLyrics:
                     for chunk in body.split()
                 ],
                 source_line=source_line,
+                direction=direction,
             )
         )
         line_index += 1

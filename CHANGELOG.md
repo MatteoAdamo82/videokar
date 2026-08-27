@@ -38,6 +38,15 @@ All notable changes to this project are documented here. The format follows
   internal gap, outside the vocal, overlapping the next line — with the score
   check taken relative to the track's own median rather than an absolute
   threshold that sung audio would fail everywhere.
-- `examples/ladycat/README.md` documenting what the reference track exercises,
-  including the chorus where the recording has one more repeat than the written
-  lyrics.
+- `examples/ladycat/README.md` documenting what the reference track exercises.
+
+### Changed
+
+- Square-bracket tags are now split two ways: a tag naming a song section
+  (`[Chorus - wide, stacked harmonies]`, `[Fade-Outro]`) opens a section, while
+  a performance direction (`[higher harmony]`, `[all voices]`) is carried on the
+  lines that follow it. Previously every tag opened a section, which chopped a
+  chorus into three.
+- `videokar lyrics` prints sections as headers rather than as a column, so a
+  long tag no longer wraps every line of the song, and shows empty sections and
+  directions.

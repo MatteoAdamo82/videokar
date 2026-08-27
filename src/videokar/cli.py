@@ -57,6 +57,7 @@ def _as_dict(lyrics: ParsedLyrics) -> dict:
                         "id": line.id,
                         "text": line.text,
                         "voice": line.voice,
+                        "direction": line.direction,
                         "source_line": line.source_line,
                         "tokens": [{"text": t.text, "norm": t.norm} for t in line.tokens],
                     }
@@ -87,19 +88,25 @@ def lyrics_cmd(
         console.print_json(json.dumps(_as_dict(lyrics)))
         return
 
-    table = Table(box=None, pad_edge=False)
+    table = Table(box=None, pad_edge=False, show_header=False)
     table.add_column("id", style="dim", no_wrap=True)
-    table.add_column("section", style="cyan", no_wrap=True)
-    table.add_column("v", no_wrap=True)
-    table.add_column("line")
-    table.add_column("words", justify="right", style="dim")
+    table.add_column("voice", no_wrap=True)
+    table.add_column("line", no_wrap=True)
+    table.add_column("words", justify="right", style="dim", no_wrap=True)
 
     for section in lyrics.sections:
-        for index, line in enumerate(section.lines):
+        label = f"[{section.tag}]" if section.tag else "[untagged]"
+        empty = "" if section.lines else "  [dim](no lines)[/dim]"
+        table.add_row("", "", f"[cyan]{label}[/cyan]{empty}", "")
+        direction = None
+        for line in section.lines:
+            if line.direction != direction:
+                direction = line.direction
+                if direction:
+                    table.add_row("", "", f"  [magenta]↳ {direction}[/magenta]", "")
             table.add_row(
                 line.id,
-                (section.tag or "—") if index == 0 else "",
-                "(" if line.voice == "paren" else " ",
+                "[dim]([/dim]" if line.voice == "paren" else " ",
                 line.text,
                 str(len(line.alignable_tokens)),
             )

@@ -76,20 +76,67 @@ def test_empty_input_is_an_error():
         parse_lyrics("[Verse 1]\n[Chorus]\n")
 
 
+DIRECTIONS = """
+[Chorus - wide, stacked harmonies]
+Two purrs and then she's gone
+[higher harmony]
+I leave the bowl outside
+[Outro]
+Seven o'clock
+"""
+
+
+def test_a_tag_naming_a_section_starts_one_even_with_a_description():
+    lyrics = parse_lyrics(DIRECTIONS)
+    assert [s.tag for s in lyrics.sections] == ["Chorus - wide, stacked harmonies", "Outro"]
+
+
+def test_a_performance_direction_does_not_start_a_section():
+    # Otherwise [higher harmony] would chop the chorus in half.
+    chorus = parse_lyrics(DIRECTIONS).sections[0]
+    assert len(chorus.lines) == 2
+
+
+def test_a_direction_is_carried_on_the_lines_that_follow_it():
+    lines = parse_lyrics(DIRECTIONS).lines
+    assert lines[0].direction is None
+    assert lines[1].direction == "higher harmony"
+
+
+def test_a_new_section_clears_the_direction():
+    assert parse_lyrics(DIRECTIONS).lines[2].direction is None
+
+
+def test_an_empty_section_is_kept():
+    # [Instrumental] carries no words but is part of the song's shape.
+    lyrics = parse_lyrics("[Instrumental]\n\n[Verse 1]\nhello there")
+    assert [s.tag for s in lyrics.sections] == ["Instrumental", "Verse 1"]
+    assert lyrics.sections[0].lines == []
+
+
 def test_ladycat_lyrics_parse(ladycat_lyrics_path):
     lyrics = parse_lyrics_file(ladycat_lyrics_path)
     assert [s.tag for s in lyrics.sections] == [
+        "Soft Intro",
         "Verse 1",
         "Pre-Chorus",
-        "Chorus",
+        "Chorus - wide, stacked harmonies, wall of guitars",
+        "Instrumental",
         "Verse 2",
         "Pre-Chorus",
         "Final Chorus",
         "Outro",
+        "Fade-Outro",
     ]
-    assert len(lyrics) == 35
-    # The chorus fix from the prototype notes: three lines, not two.
-    chorus = next(s for s in lyrics.sections if s.tag == "Chorus")
-    assert len(chorus.lines) == 3
+    assert len(lyrics) == 36
+    # Four phrases, matching what the recording actually sings.
+    chorus = next(s for s in lyrics.sections if s.tag.startswith("Chorus"))
+    assert len(chorus.lines) == 4
+    assert [line.direction for line in chorus.lines] == [
+        None,
+        None,
+        "higher harmony",
+        "all voices",
+    ]
     assert all(line.is_alignable for line in lyrics.lines)
     assert lyrics.alignable_words[:3] == ["seven", "o'clock", "she's"]
