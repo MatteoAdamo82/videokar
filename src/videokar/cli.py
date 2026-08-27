@@ -284,7 +284,18 @@ def render_cmd(
     font: Annotated[
         Path | None, typer.Option("--font", help="Font file. Defaults to a system sans.")
     ] = None,
-    font_size: Annotated[int, typer.Option("--font-size")] = 64,
+    font_size: Annotated[
+        int | None,
+        typer.Option("--font-size", help="Pixels. Defaults to a size that suits --height."),
+    ] = None,
+    min_scale: Annotated[
+        float,
+        typer.Option(
+            "--min-scale",
+            help="Allow a too-wide line to shrink this far instead of wrapping. "
+            "1.0 keeps every line the same size.",
+        ),
+    ] = 1.0,
     audio: Annotated[
         bool, typer.Option("--audio/--no-audio", help="Mux the original audio in.")
     ] = True,
@@ -320,7 +331,13 @@ def render_cmd(
             segment_seconds=segment,
             audio=audio,
         ),
-        main=TextStyle(font=str(font) if font else None, size=font_size),
+        main=TextStyle(
+            font=str(font) if font else None,
+            # Tied to the frame height so the default looks the same at 720p and
+            # 4K. Fixed for the whole render either way.
+            size=font_size if font_size else max(12, round(height / 17)),
+            min_scale=min_scale,
+        ),
     )
 
     try:
@@ -363,10 +380,16 @@ def render_cmd(
     except (EncodeError, OSError) as exc:
         _fail(str(exc))
 
+    wrapped = sum(1 for cue in renderer.cues if cue.layout.rows > 1)
     console.print(
         f"[green]{total_frames}[/green] frames, {len(renderer.cues)} lines "
         f"at {width}x{height}@{fps} → {destination}"
     )
+    if wrapped:
+        console.print(
+            f"[yellow]{wrapped}[/yellow] lines were too wide and wrapped onto two rows — "
+            "use a smaller --font-size to keep them on one"
+        )
 
 
 def _resolve_audio(song, song_path: Path) -> Path | None:

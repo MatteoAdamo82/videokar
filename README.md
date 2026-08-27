@@ -108,8 +108,14 @@ minutes. Frame times come from the absolute frame index rather than accumulating
 per segment, so a seam cannot drift the timing.
 
 Styling is currently command-line flags — `--width`, `--height`, `--fps`,
-`--font`, `--font-size`, `--opaque`. The TOML config with presets is the next
-step.
+`--font`, `--font-size`, `--min-scale`, `--opaque`. The TOML config with presets
+is the next step.
+
+**Text is one size for the whole video.** A line too wide for the frame wraps
+onto two rows rather than being drawn smaller than the line before it. If you
+would rather it shrank, `--min-scale 0.7` allows that explicitly. The second
+voice — the parenthesised lines — is styled separately on purpose, and is
+smaller by default.
 
 ## The pivot format
 

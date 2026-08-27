@@ -5,8 +5,9 @@ measuring text is not free and a three minute video at 25fps asks for the same
 line several hundred times.
 
 Font size is fixed rather than fitted to the line: a karaoke video whose text
-changes size line to line looks broken. A line too wide for the frame shrinks
-only as far as `min_scale`, and past that it wraps.
+changes size line to line looks broken. A line too wide for the frame wraps at
+the size it was given. Shrinking happens only when `min_scale` is explicitly
+set below 1.0.
 """
 
 from __future__ import annotations
@@ -91,9 +92,9 @@ def layout_line(line: Line, style: TextStyle, layout: Layout, output: Output) ->
     font = load_font(font_path, size)
     rows = _wrap(texts, font, limit)
 
-    # One row that overflows can shrink rather than wrap; only when shrinking to
-    # min_scale still does not fit does the line break.
-    if len(rows) > 1:
+    # Shrinking is off unless asked for: a line drawn smaller than the one
+    # before it is more distracting than a line that takes two rows.
+    if len(rows) > 1 and style.min_scale < 1.0:
         smaller = max(int(style.size * style.min_scale), 1)
         candidate = load_font(font_path, smaller)
         if len(_wrap(texts, candidate, limit)) == 1:

@@ -97,3 +97,45 @@ def test_the_sung_part_of_a_line_is_drawn_differently():
     before = renderer.frame(9.9)
     after = renderer.frame(10.2)
     assert before.tobytes() != after.tobytes()
+
+
+def test_a_line_never_leaves_before_its_last_word_is_sung():
+    # Lines follow each other closely in a real song: l0 ends at 20.607 and l1
+    # starts at 20.65. Clamping the exit to next.start - lead_in put it at
+    # 19.85, half a second before the last word was sung, so every line lost
+    # its ending.
+    lines = song(
+        make_line("l0", ["one", "two", "three"], 18.0, step=0.87),
+        make_line("l1", ["four", "five"], 20.65),
+    )
+    for cue in FrameRenderer(lines, STYLE).cues:
+        assert cue.leaves >= cue.line.end
+
+
+def test_the_last_word_of_a_line_is_still_drawn_when_it_is_sung():
+    lines = song(
+        make_line("l0", ["one", "two", "three"], 18.0, step=0.87),
+        make_line("l1", ["four", "five"], 20.65),
+    )
+    renderer = FrameRenderer(lines, STYLE)
+    last = lines.line("l0").words[-1]
+    cue = renderer.cue_at((last.start + last.end) / 2)
+    assert cue is not None and cue.line.id == "l0"
+
+
+def test_a_line_is_visible_not_mid_fade_while_its_last_word_is_sung():
+    lines = song(
+        make_line("l0", ["one", "two", "three"], 18.0, step=0.87),
+        make_line("l1", ["four", "five"], 20.65),
+    )
+    renderer = FrameRenderer(lines, STYLE)
+    cue = renderer.cues[0]
+    assert cue.opacity(cue.line.end, STYLE.timing.fade) == pytest.approx(1.0, abs=0.01)
+
+
+def test_a_line_is_visible_while_its_first_word_is_sung():
+    lines = song(make_line("l0", ["one", "two"], 10.0), make_line("l1", ["three"], 10.9))
+    renderer = FrameRenderer(lines, STYLE)
+    for cue in renderer.cues:
+        assert cue.appears <= cue.line.start
+        assert cue.opacity(cue.line.start, STYLE.timing.fade) == pytest.approx(1.0, abs=0.01)

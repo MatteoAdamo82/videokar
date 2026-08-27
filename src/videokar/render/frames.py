@@ -25,20 +25,26 @@ def _fade(colour: RGBA, opacity: float) -> RGBA:
 
 @dataclass(frozen=True, slots=True)
 class Cue:
-    """A line and the window it is on screen for."""
+    """A line and the window it is on screen for.
+
+    The window always contains the whole line: `appears` is at or before the
+    first word and `leaves` is at or after the last. Fades are fitted into the
+    room left over on either side rather than eating into the singing, so a word
+    is never half faded while it is being sung.
+    """
 
     line: Line
     layout: LineLayout
     appears: float
     leaves: float
+    fade_in: float = 0.0
+    fade_out: float = 0.0
 
-    def opacity(self, time: float, fade: float) -> float:
-        if fade <= 0:
-            return 1.0
-        if time < self.appears + fade:
-            return (time - self.appears) / fade
-        if time > self.leaves - fade:
-            return (self.leaves - time) / fade
+    def opacity(self, time: float, fade: float = 0.0) -> float:
+        if self.fade_in > 0 and time < self.appears + self.fade_in:
+            return max(0.0, (time - self.appears) / self.fade_in)
+        if self.fade_out > 0 and time > self.leaves - self.fade_out:
+            return max(0.0, (self.leaves - time) / self.fade_out)
         return 1.0
 
 
@@ -59,17 +65,27 @@ class FrameRenderer:
             if line.sung and line.start is not None and line.end is not None
         ]
         cues: list[Cue] = []
+        previous_leaves = float("-inf")
         for index, line in enumerate(sung):
-            appears = line.start - timing.lead_in
+            following = sung[index + 1] if index + 1 < len(sung) else None
+
+            # Hand over to the next line somewhere between this line's last word
+            # and its full hold — but never before that last word is sung. Lines
+            # in a real song follow each other about forty milliseconds apart,
+            # so clamping straight to `next.start - lead_in` cut the ending off
+            # almost every line and dragged the whole song out of step.
             leaves = line.end + timing.hold
-            # Never let a line outstay the next one's entrance, or two lines
-            # cross-fade on top of each other in the same place.
-            if index + 1 < len(sung):
-                leaves = min(leaves, sung[index + 1].start - timing.lead_in)
-            if index > 0:
-                appears = max(appears, cues[-1].leaves)
+            if following is not None:
+                handover = following.start - timing.lead_in
+                leaves = min(leaves, max(handover, line.end + timing.fade))
+                leaves = max(leaves, line.end)
+
+            appears = min(line.start - timing.lead_in, line.start)
+            appears = max(appears, previous_leaves)
+            appears = min(appears, line.start)
             if leaves <= appears:
                 leaves = appears + 1e-3
+
             cues.append(
                 Cue(
                     line=line,
@@ -81,8 +97,12 @@ class FrameRenderer:
                     ),
                     appears=appears,
                     leaves=leaves,
+                    # Only fade in the room that is not being sung through.
+                    fade_in=min(timing.fade, max(0.0, line.start - appears)),
+                    fade_out=min(timing.fade, max(0.0, leaves - line.end)),
                 )
             )
+            previous_leaves = leaves
         return cues
 
     def cue_at(self, time: float) -> Cue | None:
@@ -100,7 +120,7 @@ class FrameRenderer:
             return image
 
         draw = ImageDraw.Draw(image)
-        opacity = cue.opacity(time, self.style.timing.fade)
+        opacity = cue.opacity(time)
         text_style = cue.layout.style
 
         for placed in cue.layout.words:

@@ -63,7 +63,26 @@ All notable changes to this project are documented here. The format follows
   video carries no framing, so a mismatched frame would have produced a torn
   video rather than an error.
 
+### Fixed
+
+- Lines vanished before their last word was sung. The exit time was clamped to
+  `next.start - lead_in`, and lines in a real song follow each other about forty
+  milliseconds apart, so on the reference track 24 of 36 lines were cut short —
+  up to 0.78s early — and each early exit pulled the next line in early too,
+  which made the whole video look out of step with the music. A line's window
+  now always covers the line, and fades are fitted into the room left over
+  rather than eating into the singing.
+
 ### Changed
+
+- Text no longer changes size from line to line. Shrinking a too-wide line was
+  on by default at `min_scale=0.7`, so long lines were quietly drawn smaller
+  than short ones. The default is now 1.0 — never shrink, wrap instead — and
+  shrinking is opt-in through `--min-scale`.
+- The default font size is derived from the frame height rather than fixed at
+  64px, which was too large at 720p and made six lines wrap. It is still one
+  fixed size for the whole render.
+- `videokar render` reports how many lines had to wrap.
 
 - Square-bracket tags are now split two ways: a tag naming a song section
   (`[Chorus - wide, stacked harmonies]`, `[Fade-Outro]`) opens a section, while

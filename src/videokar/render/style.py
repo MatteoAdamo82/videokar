@@ -37,8 +37,9 @@ class TextStyle:
     """Path to a .ttf/.otf. None picks the first of FONT_CANDIDATES that exists."""
 
     size: int = 64
-    """Pixels, fixed. A line that does not fit wraps or scales down to
-    `min_scale`; it never silently shrinks to fit the widest line in the song."""
+    """Pixels, and fixed. Text that changes size from line to line is the thing
+    that makes a karaoke video look broken, so a line too wide for the frame
+    wraps. Shrinking is opt-in through `min_scale`."""
 
     colour_off: RGBA = (150, 140, 170, 255)
     """Not yet sung."""
@@ -49,8 +50,14 @@ class TextStyle:
     outline: RGBA | None = (0, 0, 0, 210)
     outline_width: int = 3
     line_spacing: float = 1.15
-    min_scale: float = 0.7
-    """How far a too-wide line may shrink before it wraps instead."""
+    min_scale: float = 1.0
+    """Lower bound on shrinking a too-wide line, as a fraction of `size`.
+
+    1.0, the default, means never shrink: a line that does not fit wraps at the
+    size you asked for. Set it lower only if you would rather one long line got
+    smaller than took two rows — and know that it will then differ in size from
+    every other line on screen.
+    """
 
 
 @dataclass(frozen=True, slots=True)
