@@ -142,6 +142,13 @@ Styling is currently command-line flags — `--width`, `--height`, `--fps`,
 `--font`, `--font-size`, `--min-scale`, `--opaque`. The TOML config with presets
 is the next step.
 
+**The ball bounces on beats, not on words.** Sung words run together — on the
+reference track 41% of the gaps between words are under a third of a second and
+the quickest, "I" to "know", is 20ms, half a frame at 25fps. A full arc in that
+time is a vertical twitch. Words closer together than `min_bounce` share one
+bounce, landing over the middle of the group, so every hop lasts long enough to
+read as a bounce.
+
 **Text is one size for the whole video.** A line too wide for the frame wraps
 onto two rows rather than being drawn smaller than the line before it. If you
 would rather it shrank, `--min-scale 0.7` allows that explicitly. The second

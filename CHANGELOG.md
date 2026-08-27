@@ -70,6 +70,13 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- The ball twitched on quick words. It drew one arc per word, and sung words are
+  often only tens of milliseconds apart — "I" to "know" is 20ms on the reference
+  track, half a frame at 25fps, with 41% of all gaps under a third of a second.
+  Words closer together than `min_bounce` now share one bounce, landing over the
+  middle of the group; the shortest hop on the reference track goes from 20ms to
+  360ms, and 200 words become 145 bounces.
+
 - Lines vanished before their last word was sung. The exit time was clamped to
   `next.start - lead_in`, and lines in a real song follow each other about forty
   milliseconds apart, so on the reference track 24 of 36 lines were cut short —

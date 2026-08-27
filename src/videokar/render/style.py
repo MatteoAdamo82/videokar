@@ -74,6 +74,15 @@ class BallStyle:
     jump_height: float = 62.0
     """Peak of the arc above the text, in pixels."""
 
+    min_bounce: float = 0.35
+    """Shortest a single hop may last, in seconds.
+
+    Words closer together than this share one bounce. Sung words are often only
+    tens of milliseconds apart — "I know" is 20ms on the reference track, half a
+    frame at 25fps — and a full arc in that time is a vertical twitch, not a
+    bounce. Grouping them guarantees every hop lasts at least this long.
+    """
+
     gap_above_text: float = 26.0
     lead_in: float = 1.2
     """Seconds of run-up before the first word of a line."""

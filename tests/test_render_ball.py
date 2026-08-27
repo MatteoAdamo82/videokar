@@ -1,7 +1,7 @@
 import pytest
 
 from conftest import make_line, make_song
-from videokar.render.ball import ball_position
+from videokar.render.ball import ball_position, bounce_targets
 from videokar.render.layout import layout_line
 from videokar.render.style import BallStyle, Layout, Output, TextStyle
 
@@ -26,10 +26,10 @@ def test_nothing_is_drawn_before_the_run_in():
 
 def test_the_run_in_arrives_on_the_first_word():
     layout = lay(three_words())
-    arriving = ball_position(9.99, layout, BALL)
     first = layout.words[0]
-    assert arriving is not None
-    assert arriving.x == pytest.approx(first.centre_x, abs=1.0)
+    assert ball_position(9.99, layout, BALL).x == pytest.approx(first.centre_x, abs=2.0)
+    # On the beat it is exactly there.
+    assert ball_position(10.0, layout, BALL).x == pytest.approx(first.centre_x, abs=0.01)
 
 
 def test_the_run_in_starts_left_of_the_first_word():
@@ -101,3 +101,59 @@ def test_no_ball_for_a_line_with_no_timings():
     for word in line.words:
         word.start = word.end = None
     assert ball_position(10.5, lay(line), BALL) is None
+
+
+def quick_pair(gap=0.02):
+    """Two words sung almost together, like "I know" at 20ms apart."""
+    line = make_song(make_line("l0", ["I", "know"], 10.0)).line("l0")
+    line.words[0].start, line.words[0].end = 10.0, 10.0 + gap
+    line.words[1].start, line.words[1].end = 10.0 + gap, 10.9
+    return line
+
+
+def test_words_sung_almost_together_share_one_bounce():
+    # A full arc across 20ms is a vertical twitch at any sane frame rate.
+    assert len(bounce_targets(lay(quick_pair()).words, BALL.min_bounce)) == 1
+
+
+def test_the_shared_bounce_lands_between_the_words():
+    layout = lay(quick_pair())
+    bounce = bounce_targets(layout.words, BALL.min_bounce)[0]
+    assert layout.words[0].centre_x < bounce.centre_x < layout.words[1].centre_x
+
+
+def test_grouping_guarantees_a_minimum_hop_length():
+    line = make_song(make_line("l0", list("abcdef"), 10.0, step=0.08)).line("l0")
+    bounces = bounce_targets(lay(line).words, 0.35)
+    hops = [b.start - a.start for a, b in zip(bounces, bounces[1:], strict=False)]
+    assert all(hop >= 0.35 for hop in hops)
+
+
+def test_words_far_enough_apart_keep_their_own_bounce():
+    assert len(bounce_targets(lay(three_words()).words, BALL.min_bounce)) == 3
+
+
+def test_a_lower_threshold_groups_less():
+    layout = lay(quick_pair())
+    assert len(bounce_targets(layout.words, 0.001)) == 2
+
+
+def test_a_wrapped_row_always_starts_a_new_bounce():
+    # Landing between two rows would look like a miss, however quick the words.
+    from videokar.render.style import Layout, TextStyle
+
+    narrow = Output(width=260, height=600)
+    line = make_song(make_line("l0", ["antidisestablishment", "supercalifragilistic"], 10.0)).line(
+        "l0"
+    )
+    line.words[1].start, line.words[1].end = 10.02, 10.9
+    layout = layout_line(line, TextStyle(size=40, outline=None), Layout(margin_x=0), narrow)
+    assert layout.rows == 2
+    assert len(bounce_targets(layout.words, 0.35)) == 2
+
+
+def test_the_ball_does_not_twitch_between_two_quick_words():
+    layout = lay(quick_pair())
+    heights = [ball_position(10.0 + i * 0.01, layout, BALL).y for i in range(6)]
+    # One resting height across the pair, not an arc up and back inside 60ms.
+    assert max(heights) - min(heights) < 1.0
