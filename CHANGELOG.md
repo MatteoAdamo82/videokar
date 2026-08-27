@@ -103,6 +103,15 @@ All notable changes to this project are documented here. The format follows
 - `videokar serve` now takes an optional document and a `--dir`, so it can start
   on the library rather than needing a document to exist first.
 
+- The export dialog gained the settings worth choosing before a render —
+  where the words sit, how far from that edge, and the second voice's size —
+  above a live preview frame of the line under the playhead. Rendering blind and
+  waiting minutes to see the result is not a way to choose a position.
+- `GET /api/frame` renders a single small frame with a given style, and
+  `POST /api/render` accepts any settings the style schema knows rather than a
+  fixed handful, so the page can offer a control without the server learning its
+  name.
+
 ### Changed
 
 - The second voice is configured as a set of overrides rather than a whole

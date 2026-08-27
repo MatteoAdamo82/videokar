@@ -114,7 +114,11 @@ The view is a way in, not just a viewer for something the command line made.
 audio file plus its lyrics to align a new one — the work runs in the background
 with progress, and the document opens when it lands. **Export** renders the
 video, transparent ProRes 4444 by default, and offers it as a download when it
-is done.
+is done — with **a live preview frame** above the controls, because choosing
+where the words sit and then waiting three minutes to see it is not a way anyone
+can work. Position, distance from the edge and the second voice's size are all
+there; the margin is given as a percentage of the frame, so the same choice
+holds at any resolution.
 
 A local page on `127.0.0.1:8712` with the waveform of the **isolated vocal**
 behind the lines — the point being that you can see where a phrase actually

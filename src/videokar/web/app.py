@@ -13,12 +13,14 @@ authentication, so it is not something to expose.
 
 from __future__ import annotations
 
+import io
 import logging
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
+from PIL import Image
 from pydantic import BaseModel
 
 from ..audio.peaks import peaks_for
@@ -57,6 +59,9 @@ class RenderRequest(BaseModel):
     width: int | None = None
     height: int | None = None
     fps: int | None = None
+    overrides: dict[str, Any] | None = None
+    """Anything else from the style schema. Validated by resolve_style, so the
+    page can offer a control for a setting without the server learning its name."""
 
 
 class OpenRequest(BaseModel):
@@ -281,20 +286,8 @@ def create_app(
     def start_render(request: RenderRequest) -> dict[str, Any]:
         path = current()
         song = load_song(path)
-        overrides = {
-            "output": {
-                key: value
-                for key, value in {
-                    "format": request.format,
-                    "width": request.width,
-                    "height": request.height,
-                    "fps": request.fps,
-                }.items()
-                if value is not None
-            }
-        }
         try:
-            style = resolve_style(preset=request.preset, overrides=overrides)
+            style = _style_for(request)
         except ConfigError as exc:
             raise HTTPException(422, str(exc)) from exc
 
@@ -331,6 +324,51 @@ def create_app(
         job.extra["file"] = destination.name
         return job.as_dict()
 
+    @app.get("/api/frame")
+    def preview_frame(
+        at: float = 0.0,
+        preset: str | None = None,
+        width: int = 640,
+        anchor: str | None = None,
+        margin_y: int | None = None,
+        margin_x: int | None = None,
+        paren_scale: float | None = None,
+    ) -> Any:
+        """One frame, small, so a setting can be judged before a render.
+
+        Choosing where the words sit and then waiting three minutes to see it is
+        not a way anyone can work.
+        """
+        path = current()
+        song = load_song(path)
+        overrides: dict[str, Any] = {"layout": {}, "paren": {}}
+        if anchor is not None:
+            overrides["layout"]["anchor"] = anchor
+        if margin_y is not None:
+            overrides["layout"]["margin_y"] = margin_y
+        if margin_x is not None:
+            overrides["layout"]["margin_x"] = margin_x
+        if paren_scale is not None:
+            overrides["paren"]["scale"] = paren_scale
+        try:
+            style = resolve_style(preset=preset, overrides=overrides)
+        except ConfigError as exc:
+            raise HTTPException(422, str(exc)) from exc
+
+        from ..render import FrameRenderer  # noqa: PLC0415
+
+        frame = FrameRenderer(song, style).frame(at)
+        # Composited onto the background it would be encoded onto, so a
+        # transparent overlay is judged the way it will be seen.
+        red, green, blue, _ = style.output.background
+        flat = Image.new("RGB", frame.size, (red, green, blue))
+        flat.paste(frame, (0, 0), frame)
+        height = max(1, round(width * frame.height / frame.width))
+        flat = flat.resize((width, height), Image.LANCZOS)
+        buffer = io.BytesIO()
+        flat.save(buffer, format="PNG")
+        return Response(buffer.getvalue(), media_type="image/png")
+
     @app.get("/api/jobs")
     def list_jobs() -> dict[str, Any]:
         return {"jobs": [job.as_dict() for job in session.jobs.all()]}
@@ -360,6 +398,23 @@ def create_app(
         return FileResponse(path, filename=name)
 
     return app
+
+
+def _style_for(request: RenderRequest):
+    """The style a render request asks for, presets and overrides resolved."""
+    overrides: dict[str, Any] = dict(request.overrides or {})
+    output = dict(overrides.get("output") or {})
+    for key, value in (
+        ("format", request.format),
+        ("width", request.width),
+        ("height", request.height),
+        ("fps", request.fps),
+    ):
+        if value is not None:
+            output[key] = value
+    if output:
+        overrides["output"] = output
+    return resolve_style(preset=request.preset, overrides=overrides)
 
 
 def _dispatch(song, request: EditRequest) -> Any:

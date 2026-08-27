@@ -108,6 +108,9 @@
   .job { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-top: 8px; }
   .bar { height: 5px; background: #14131c; border-radius: 3px; overflow: hidden; margin-top: 7px; }
   .bar i { display: block; height: 100%; background: #6f8bff; width: 0; transition: width .2s; }
+  .preview { display: block; width: 100%; border-radius: 8px; margin: 12px 0 4px;
+             background: #0d0c14; border: 1px solid var(--line); }
+  input[type=range] { width: 100%; accent-color: #6f8bff; }
   .job.failed { border-color: var(--bad); }
   .job.done { border-color: var(--pin); }
   a.dl { color: #9fb4ff; }
@@ -573,6 +576,7 @@ $("#export").onclick = async () => {
   openSheet(`
     <h1>Export</h1>
     <p>Rendered next to the document, then offered as a download.</p>
+    <img id="preview" class="preview" alt="preview">
     <div class="grid">
       <label>preset
         <select id="expreset">
@@ -585,17 +589,66 @@ $("#export").onclick = async () => {
         <option value="">from the preset</option><option>24</option><option>25</option>
         <option>30</option><option>50</option><option>60</option>
       </select></label>
+      <label>the words sit<select id="expanchor">
+        <option value="bottom">near the bottom</option>
+        <option value="center">in the middle</option>
+        <option value="top">near the top</option>
+      </select></label>
+      <label>how far from that edge — <b id="expmarginout">11%</b> of the frame
+        <input type="range" id="expmargin" min="0" max="30" value="11">
+      </label>
+      <label>second voice — <b id="expparenout">0.72×</b> the main size
+        <input type="range" id="expparen" min="50" max="120" value="72">
+      </label>
     </div>
     <div class="actions"><button class="primary" id="startrender">Render</button></div>
     <div id="jobs"></div>`);
 
+  const settings = () => ({
+    preset: $("#expreset").value,
+    anchor: $("#expanchor").value,
+    // A percentage of the frame, so the same choice holds at any resolution.
+    margin_pct: Number($("#expmargin").value),
+    paren_scale: Number($("#expparen").value) / 100,
+  });
+
+  const refresh = () => {
+    const s = settings();
+    $("#expmarginout").textContent = `${s.margin_pct}%`;
+    $("#expparenout").textContent = `${s.paren_scale.toFixed(2)}×`;
+    const height = presetHeight(s.preset);
+    const query = new URLSearchParams({
+      at: previewTime().toFixed(2),
+      preset: s.preset,
+      anchor: s.anchor,
+      margin_y: Math.round(height * s.margin_pct / 100),
+      paren_scale: s.paren_scale,
+    });
+    $("#preview").src = "/api/frame?" + query;
+  };
+  for (const id of ["expreset", "expanchor", "expmargin", "expparen"]) {
+    $("#" + id).oninput = refresh;
+  }
+  refresh();
+
   $("#startrender").onclick = async () => {
     $("#startrender").disabled = true;
+    const s = settings();
     const fps = $("#expfps").value;
     try {
       const job = await api("/api/render", {
         method: "POST", headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({preset: $("#expreset").value, fps: fps ? Number(fps) : null}),
+        body: JSON.stringify({
+          preset: s.preset,
+          fps: fps ? Number(fps) : null,
+          overrides: {
+            layout: {
+              anchor: s.anchor,
+              margin_y: Math.round(presetHeight(s.preset) * s.margin_pct / 100),
+            },
+            paren: {scale: s.paren_scale},
+          },
+        }),
       });
       watchJob(job);
     } catch (err) {
@@ -605,6 +658,22 @@ $("#export").onclick = async () => {
     }
   };
 };
+
+// Heights the presets render at, so a margin given as a percentage can be
+// turned into the pixels the schema wants.
+const PRESET_HEIGHT = {alpha: 1080, youtube: 1080, minimal: 1080, shorts: 1920};
+const presetHeight = (name) => PRESET_HEIGHT[name] || 1080;
+
+function previewTime() {
+  // The line under the playhead, or the next one along: previewing a frame with
+  // nothing drawn on it tells you nothing about where the words sit.
+  const here = audio.currentTime;
+  const timed = lines().filter((line) => line.start != null);
+  const active = timed.find((line) => line.start <= here && here <= line.end);
+  if (active) return here;
+  const next = timed.find((line) => line.start > here) || timed[0];
+  return next ? next.start + Math.min(0.6, (next.end - next.start) / 2) : here;
+}
 
 function watchJob(job, onFinish) {
   const box = $("#jobs");

@@ -312,3 +312,57 @@ def test_a_job_that_fails_reports_why_rather_than_crashing(client, tmp_path):
 
 def test_an_unknown_job_is_a_404(client):
     assert client.get("/api/jobs/nope").status_code == 404
+
+
+def test_a_preview_frame_comes_back_as_an_image(client):
+    response = client.get("/api/frame", params={"at": 20.5, "width": 200})
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+
+
+def test_a_preview_frame_is_the_width_asked_for(client):
+    import io
+
+    from PIL import Image
+
+    response = client.get("/api/frame", params={"at": 20.5, "width": 200})
+    assert Image.open(io.BytesIO(response.content)).size[0] == 200
+
+
+def test_moving_the_words_changes_the_preview(client):
+    low = client.get("/api/frame", params={"at": 20.5, "margin_y": 20}).content
+    high = client.get("/api/frame", params={"at": 20.5, "margin_y": 400}).content
+    assert low != high
+
+
+def test_a_preview_with_a_setting_the_schema_refuses_says_so(client):
+    response = client.get("/api/frame", params={"at": 20.5, "anchor": "sideways"})
+    assert response.status_code == 422
+    assert "layout.anchor" in response.json()["detail"]
+
+
+def test_a_render_takes_any_setting_the_schema_knows(client):
+    job = client.post(
+        "/api/render",
+        json={"preset": "alpha", "overrides": {"layout": {"anchor": "top", "margin_y": 40}}},
+    )
+    assert job.status_code == 200
+
+
+def test_a_render_with_a_setting_the_schema_refuses_says_so(client):
+    response = client.post(
+        "/api/render", json={"overrides": {"layout": {"anchor": "sideways"}}}
+    )
+    assert response.status_code == 422
+    assert "layout.anchor" in response.json()["detail"]
+
+
+def test_an_override_does_not_lose_the_named_output_fields(client):
+    # width/height/fps arrive as their own fields and must survive being merged
+    # with whatever else the page sent.
+    from videokar.web.app import RenderRequest, _style_for
+
+    style = _style_for(
+        RenderRequest(preset="alpha", fps=48, overrides={"output": {"width": 640}})
+    )
+    assert (style.output.fps, style.output.width, style.output.format) == (48, 640, "prores4444")
