@@ -269,6 +269,115 @@ def check_cmd(
         raise typer.Exit(1)
 
 
+@app.command("render")
+def render_cmd(
+    song_path: Annotated[Path, typer.Argument(help="Pivot JSON written by 'videokar align'.")],
+    output_path: Annotated[
+        Path | None, typer.Option("--out", "-o", help="Output file [SONG.mov].")
+    ] = None,
+    fmt: Annotated[
+        str, typer.Option("--format", "-f", help="prores4444, mp4 or png.")
+    ] = "prores4444",
+    width: Annotated[int, typer.Option("--width")] = 1920,
+    height: Annotated[int, typer.Option("--height")] = 1080,
+    fps: Annotated[int, typer.Option("--fps")] = 25,
+    font: Annotated[
+        Path | None, typer.Option("--font", help="Font file. Defaults to a system sans.")
+    ] = None,
+    font_size: Annotated[int, typer.Option("--font-size")] = 64,
+    audio: Annotated[
+        bool, typer.Option("--audio/--no-audio", help="Mux the original audio in.")
+    ] = True,
+    opaque: Annotated[
+        bool,
+        typer.Option("--opaque", help="Black background instead of a transparent overlay."),
+    ] = False,
+    segment: Annotated[
+        float, typer.Option("--segment", help="Seconds per render segment.")
+    ] = 60.0,
+) -> None:
+    """Draw the karaoke overlay and encode it."""
+
+    from .render import CODECS, EncodeError, FrameRenderer, Output, Style, TextStyle
+    from .render.encode import render_png_sequence, render_segmented
+    from .render.style import FontError
+
+    if fmt not in CODECS:
+        _fail(f"unknown format {fmt!r} — one of {', '.join(sorted(CODECS))}")
+
+    try:
+        song = load_song(song_path)
+    except (OSError, ProjectError) as exc:
+        _fail(str(exc))
+
+    style = Style(
+        output=Output(
+            width=width,
+            height=height,
+            fps=fps,
+            format=fmt,
+            background=(0, 0, 0, 255) if opaque or fmt == "mp4" else (0, 0, 0, 0),
+            segment_seconds=segment,
+            audio=audio,
+        ),
+        main=TextStyle(font=str(font) if font else None, size=font_size),
+    )
+
+    try:
+        renderer = FrameRenderer(song, style)
+    except FontError as exc:
+        _fail(str(exc))
+
+    if not renderer.cues:
+        _fail("nothing to draw — every line is unsung or untimed")
+
+    audio_file = _resolve_audio(song, song_path) if audio and fmt != "png" else None
+    if audio and fmt != "png" and audio_file is None:
+        console.print(f"[yellow]note:[/yellow] audio {song.audio.path!r} not found, rendering mute")
+
+    destination = output_path or song_path.with_suffix(CODECS[fmt].suffix or "")
+    end = song.audio.duration
+    total_frames = int(round(end * fps))
+
+    try:
+        if fmt == "png":
+            with console.status(f"rendering {total_frames} frames…", spinner="dots"):
+                render_png_sequence(
+                    (renderer.frame(i / fps) for i in range(total_frames)), destination
+                )
+        else:
+            with console.status(f"rendering {total_frames} frames…", spinner="dots") as status:
+
+                def progress(done: int, count: int) -> None:
+                    status.update(f"rendering segment {done}/{count}…")
+
+                render_segmented(
+                    renderer.frame,
+                    destination,
+                    style.output,
+                    start=0.0,
+                    end=end,
+                    audio_path=audio_file,
+                    on_segment=progress,
+                )
+    except (EncodeError, OSError) as exc:
+        _fail(str(exc))
+
+    console.print(
+        f"[green]{total_frames}[/green] frames, {len(renderer.cues)} lines "
+        f"at {width}x{height}@{fps} → {destination}"
+    )
+
+
+def _resolve_audio(song, song_path: Path) -> Path | None:
+    """Find the audio the document names, relative to the document if need be."""
+    candidate = Path(song.audio.path)
+    for option in (candidate, song_path.parent / candidate, song_path.parent / candidate.name):
+        if option.exists():
+            return option
+    return None
+
+
 def main() -> None:
     app()
 

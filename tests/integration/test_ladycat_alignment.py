@@ -130,3 +130,36 @@ def test_a_word_the_aligner_never_saw_keeps_its_place_without_timing(aligned):
     for line in song.lines:
         # One drawable token per written word, timed or not.
         assert len(line.words) == len(line.words_text.split())
+
+
+def test_the_whole_song_renders_to_a_file_with_alpha(aligned, tmp_path):
+    from dataclasses import replace
+
+    from videokar.project import build_song
+    from videokar.render import FrameRenderer, Output, Style, TextStyle
+    from videokar.render.encode import have_ffmpeg, render_segmented
+
+    if not have_ffmpeg():
+        pytest.skip("ffmpeg is not on PATH")
+
+    song = build_song(aligned)
+    # Small and coarse: this checks the pipe and the file, not the picture.
+    style = Style(
+        output=Output(width=320, height=180, fps=6, segment_seconds=30.0),
+        main=TextStyle(size=14),
+    )
+    renderer = FrameRenderer(song, style)
+    assert len(renderer.cues) == len([ln for ln in song.lines if ln.start is not None])
+
+    destination = tmp_path / "ladycat.mov"
+    render_segmented(
+        renderer.frame, destination, style.output, start=0.0, end=20.0, audio_path=None
+    )
+    assert destination.stat().st_size > 0
+
+    # A frame during the first line has something on it; the intro does not.
+    assert renderer.frame(2.0).getbbox() is None
+    assert renderer.frame(song.lines[0].start + 0.1).getbbox() is not None
+
+    muted = replace(style, output=replace(style.output, format="mp4", background=(0, 0, 0, 255)))
+    assert FrameRenderer(song, muted).frame(song.lines[0].start).mode == "RGBA"

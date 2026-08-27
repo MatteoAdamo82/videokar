@@ -51,6 +51,18 @@ All notable changes to this project are documented here. The format follows
   editing can break: a stale line text, a stale aligner form, a line marked sung
   with no timings, a word that ends before it starts, lines out of order.
 
+- The renderer: text laid out once per line and cached, per-word colouring as
+  the vocal passes, a second voice drawn in its own style, and a ball that hops
+  from word to word on an arc so it lands on the beat rather than chasing it.
+- `videokar render SONG.json` writing ProRes 4444 with alpha, H.264 mp4 with the
+  audio muxed in, or a numbered PNG sequence.
+- Fixed font size with an explicit floor: a line too wide to fit shrinks only as
+  far as `min_scale` and wraps past that, rather than resizing itself line by
+  line.
+- Segmented encoding with a stream-copy concat, and a frame-size guard — raw
+  video carries no framing, so a mismatched frame would have produced a torn
+  video rather than an error.
+
 ### Changed
 
 - Square-bracket tags are now split two ways: a tag naming a song section

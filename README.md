@@ -83,14 +83,33 @@ alignment. Digits are spelled out in English, so `7` matches a sung "seven".
 | `videokar lyrics FILE` | parse a lyrics file and show how it will reach the aligner |
 | `videokar align AUDIO --lyrics FILE` | separate, align, and write the pivot JSON |
 | `videokar check SONG.json` | list the lines worth a second look |
+| `videokar render SONG.json` | draw the overlay and encode it |
 
-More commands land with their pipeline stage: `fix`, `render`, `preview`,
-`build`, `transcribe`, `config`, `cache`.
+More commands land with their pipeline stage: `fix`, `preview`, `build`,
+`transcribe`, `config`, `cache`.
 
 ```bash
 videokar align song.mp3 --lyrics song.txt -o song.json
 videokar check song.json
+videokar render song.json -o overlay.mov
 ```
+
+## Output
+
+| `--format` | what you get |
+| --- | --- |
+| `prores4444` (default) | `.mov` with a real alpha channel — drop it straight over a clip in Final Cut |
+| `mp4` | H.264 on an opaque background, audio muxed in |
+| `png` | numbered frames with alpha, for anything else |
+
+Long renders go out in segments and are concatenated with a stream copy, so a
+three minute track never depends on one ffmpeg process staying alive for three
+minutes. Frame times come from the absolute frame index rather than accumulating
+per segment, so a seam cannot drift the timing.
+
+Styling is currently command-line flags — `--width`, `--height`, `--fps`,
+`--font`, `--font-size`, `--opaque`. The TOML config with presets is the next
+step.
 
 ## The pivot format
 
