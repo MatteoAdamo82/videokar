@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ..lyrics.normalize import normalize_token
 from .model import Line, Song, Word
 
 MIN_GAP = 0.01
@@ -232,3 +233,26 @@ def stretch(song: Song, first_id: str, last_id: str, start: float, end: float) -
         [line.id for line in chosen],
         f"fitted {len(chosen)} lines into {start:.2f}-{end:.2f}s",
     )
+
+
+def set_word_text(song: Song, word_id: str, text: str) -> Edit:
+    """Correct a word the aligner heard wrong.
+
+    The aligner form is recomputed from the new text rather than left behind,
+    and the line's readable copy is rebuilt, so a correction made here does not
+    show up as the staleness `check` warns about after a raw file edit.
+    """
+    text = text.strip()
+    if not text:
+        raise FixError("a word cannot be emptied — mute the line instead")
+    if " " in text:
+        raise FixError(f"{text!r} contains a space: a word is one token")
+
+    word = song.word(word_id)
+    line = next(ln for ln in song.lines if any(w.id == word_id for w in ln.words))
+    was = word.text
+    word.text = text
+    word.norm = normalize_token(text, lang=song.align.language)
+    word.manual = True
+    line.rebuild_text()
+    return Edit([line.id], f"{word_id}: {was!r} -> {text!r}")

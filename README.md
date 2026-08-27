@@ -85,9 +85,31 @@ alignment. Digits are spelled out in English, so `7` matches a sung "seven".
 | `videokar check SONG.json` | list the lines worth a second look |
 | `videokar render SONG.json` | draw the overlay and encode it |
 | `videokar fix SONG.json ...` | correct timings by hand |
+| `videokar serve SONG.json` | the sync view, in a browser |
 
 More commands land with their pipeline stage: `preview`, `build`, `transcribe`,
 `config`, `cache`.
+
+## The sync view
+
+```bash
+videokar serve song.json
+```
+
+A local page on `127.0.0.1:8712` with the waveform of the **isolated vocal**
+behind the lines — the point being that you can see where a phrase actually
+starts instead of guessing at it. Drag a line to move it, drag a word to nudge
+it, double-click a word to retype one the aligner misheard. Space plays, arrows
+scrub, clicking the waveform seeks.
+
+Every edit goes through the same operations `videokar fix` uses, so pinning and
+the ripple behave identically whether you drag or type a command, and an edit
+that would invert the timeline comes back as a message rather than being
+written. The file on disk is rewritten after each accepted edit — there is no
+save button and nothing to lose — and ⌘Z steps back through the last fifty.
+
+It reads and writes a file on your machine and has no authentication, so it
+binds to localhost and should stay there.
 
 ## Fixing a drifting block
 

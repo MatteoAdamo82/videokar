@@ -1,0 +1,397 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>videokar — sync</title>
+<style>
+  :root {
+    --bg: #14131c; --panel: #1c1b26; --line: #2a2836; --ink: #e6e3f0;
+    --dim: #8d89a3; --on: #ffeebe; --off: #9b95b4; --ball: #ff7846;
+    --pin: #6fd08c; --flag: #e5c07b; --bad: #e06c75;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 13px/1.45 ui-sans-serif, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; align-items: center; gap: 14px; padding: 10px 14px;
+           background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+  button { background: #2b293a; color: var(--ink); border: 1px solid #3a3750;
+           border-radius: 6px; padding: 5px 11px; cursor: pointer; font: inherit; }
+  button:hover { background: #35324a; }
+  button.primary { background: #3d5afe22; border-color: #5b6bd6; }
+  .time { font-variant-numeric: tabular-nums; color: var(--dim); min-width: 108px; }
+  .grow { flex: 1; }
+  #status { color: var(--dim); }
+  #status.bad { color: var(--bad); }
+  #status.good { color: var(--pin); }
+
+  main { display: flex; height: calc(100vh - 49px); }
+  #side { width: 268px; flex: none; overflow-y: auto; background: var(--panel);
+          border-right: 1px solid var(--line); }
+  #side h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
+             color: var(--dim); margin: 14px 12px 6px; font-weight: 600; }
+  .row { padding: 5px 12px; cursor: pointer; display: flex; gap: 7px; align-items: baseline; }
+  .row:hover { background: #24222f; }
+  .row.active { background: #2f2c40; }
+  .row .id { color: var(--dim); font-variant-numeric: tabular-nums; min-width: 30px; }
+  .row .txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row.flagged .txt { color: var(--flag); }
+  .row.muted .txt { color: var(--dim); text-decoration: line-through; }
+
+  #scroll { flex: 1; overflow-x: auto; overflow-y: hidden; position: relative; }
+  #track { position: relative; height: 100%; }
+  canvas { position: absolute; inset: 0; }
+  #lines { position: absolute; left: 0; right: 0; top: 190px; height: 132px; }
+
+  .lineblock { position: absolute; height: 96px; border-radius: 7px;
+               background: #221f2e; border: 1px solid #363248; cursor: grab; }
+  .lineblock.pinned { border-color: var(--pin); background: #1e2a24; }
+  .lineblock.muted { opacity: .4; border-style: dashed; }
+  .lineblock.flagged { border-color: var(--flag); }
+  .lineblock.sel { box-shadow: 0 0 0 2px #5b6bd6; }
+  .lineblock .label { position: absolute; top: -18px; left: 0; font-size: 11px;
+                      color: var(--dim); white-space: nowrap; }
+  .lineblock .tools { position: absolute; top: -19px; right: 0; display: flex; gap: 4px; }
+  .lineblock .tools button { padding: 0 6px; font-size: 11px; line-height: 16px; }
+
+  .word { position: absolute; top: 26px; height: 44px; border-radius: 5px;
+          background: #322e45; border: 1px solid #443f5e; color: var(--off);
+          display: flex; align-items: center; justify-content: center;
+          padding: 0 4px; cursor: ew-resize; overflow: hidden; white-space: nowrap;
+          font-size: 12px; }
+  .word.sung { background: #4a3f2a; border-color: #7a6438; color: var(--on); }
+  .word.manual { border-bottom: 2px solid var(--ball); }
+  /* A real input rather than a contenteditable chip: focus, select-all, Enter
+     and Escape all behave, and there is no editable node for a re-render to
+     pull out from under the caret. */
+  .wordedit { position: fixed; z-index: 20; height: 44px; border-radius: 5px;
+              background: #1f2b3a; border: 1px solid #5b6bd6; color: #fff;
+              text-align: center; font: 12px ui-sans-serif, sans-serif; padding: 0 4px; }
+  #playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--ball);
+              pointer-events: none; z-index: 3; }
+  /* Fixed to the window, not the track: pinned to the track it scrolled out of
+     sight the moment you looked at anything past the intro. */
+  #hint { position: fixed; bottom: 10px; left: 282px; right: 14px; color: var(--dim);
+          font-size: 11px; pointer-events: none; text-shadow: 0 0 6px var(--bg); }
+</style>
+
+<header>
+  <button id="play">▶︎ Play</button>
+  <span class="time" id="clock">0:00.00 / 0:00.00</span>
+  <button id="zoomout">−</button><button id="zoomin">+</button>
+  <button id="undo" disabled>↶ Undo</button>
+  <span class="grow"></span>
+  <span id="status">loading…</span>
+</header>
+
+<main>
+  <aside id="side"></aside>
+  <div id="scroll">
+    <div id="track">
+      <canvas id="wave"></canvas>
+      <div id="hint">drag a line to move it (later lines follow, up to a pin) · drag a word to nudge it · double-click a word to retype it</div>
+      <div id="lines"></div>
+      <div id="playhead"></div>
+    </div>
+  </div>
+</main>
+
+<audio id="audio" preload="auto"></audio>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const audio = $("#audio"), scroll = $("#scroll"), track = $("#track"),
+      linesEl = $("#lines"), head = $("#playhead"), wave = $("#wave"), side = $("#side");
+
+let state = null, peaks = null, pps = 110, duration = 0, selected = null, follow = true;
+let undoDepth = 0;
+
+const fmt = (t) => `${Math.floor(t/60)}:${String(Math.floor(t%60)).padStart(2,"0")}.${String(Math.floor(t%1*100)).padStart(2,"0")}`;
+const say = (msg, kind="") => { const s = $("#status"); s.textContent = msg; s.className = kind; };
+
+async function api(path, options) {
+  const response = await fetch(path, options);
+  if (!response.ok) {
+    let detail = response.statusText;
+    try { detail = (await response.json()).detail || detail; } catch {}
+    throw new Error(detail);
+  }
+  return response.json();
+}
+
+async function load() {
+  state = await api("/api/song");
+  duration = state.song.audio.duration;
+  audio.src = "/api/audio";
+  try { peaks = await api("/api/peaks"); } catch { peaks = null; }
+  layout(); render();
+  say(`${state.song.sections.reduce((n,s)=>n+s.lines.length,0)} lines · ${state.suspicious.length} flagged`);
+}
+
+const lines = () => state.song.sections.flatMap((s) => s.lines);
+
+function layout() {
+  const width = Math.max(900, Math.round(duration * pps));
+  track.style.width = width + "px";
+  wave.width = width; wave.height = 320;
+  wave.style.width = width + "px"; wave.style.height = "320px";
+  drawWave();
+}
+
+function drawWave() {
+  const ctx = wave.getContext("2d");
+  ctx.clearRect(0, 0, wave.width, wave.height);
+  const mid = 95, half = 78;
+  if (peaks) {
+    const perSecond = peaks.buckets_per_second;
+    ctx.fillStyle = "#3a3550";
+    for (let x = 0; x < wave.width; x++) {
+      const t = x / pps;
+      const from = Math.floor(t * perSecond), to = Math.max(from + 1, Math.floor((x + 1) / pps * perSecond));
+      let peak = 0;
+      for (let i = from; i < to && i < peaks.peaks.length; i++) peak = Math.max(peak, peaks.peaks[i]);
+      const h = (peak / 255) * half;
+      ctx.fillRect(x, mid - h, 1, h * 2);
+    }
+  }
+  // Vocal regions: where the stem says someone is singing.
+  ctx.fillStyle = "#6fd08c22";
+  for (const [a, b] of state.song.vocal_regions) ctx.fillRect(a * pps, 8, (b - a) * pps, 10);
+  // A second grid, so a drag has something to read distance against.
+  ctx.strokeStyle = "#ffffff10"; ctx.fillStyle = "#6b6683"; ctx.font = "10px ui-monospace, monospace";
+  const step = pps < 40 ? 10 : pps < 90 ? 5 : 1;
+  for (let t = 0; t < duration; t += step) {
+    const x = Math.round(t * pps) + 0.5;
+    ctx.beginPath(); ctx.moveTo(x, 24); ctx.lineTo(x, wave.height); ctx.stroke();
+    ctx.fillText(fmt(t).slice(0, -3), x + 3, 34);
+  }
+}
+
+function render() {
+  linesEl.innerHTML = ""; side.innerHTML = "";
+  const flaggedHeading = document.createElement("h2");
+  flaggedHeading.textContent = "lines";
+  side.append(flaggedHeading);
+
+  for (const line of lines()) {
+    const row = document.createElement("div");
+    row.className = "row" + (state.suspicious.includes(line.id) ? " flagged" : "") + (line.sung ? "" : " muted");
+    row.dataset.line = line.id;
+    if (selected === line.id) row.classList.add("active");
+    row.innerHTML = `<span class="id">${line.id}</span><span class="txt">${escapeHtml(wordsText(line))}</span>`;
+    row.onclick = () => { if (line.start != null) seek(line.start - 0.4); select(line.id); };
+    side.append(row);
+    if (line.start == null) continue;
+
+    const block = document.createElement("div");
+    block.className = "lineblock"
+      + (line.pinned ? " pinned" : "") + (line.sung ? "" : " muted")
+      + (state.suspicious.includes(line.id) ? " flagged" : "")
+      + (selected === line.id ? " sel" : "");
+    block.style.left = line.start * pps + "px";
+    block.style.width = Math.max(26, (line.end - line.start) * pps) + "px";
+    block.dataset.line = line.id;
+    block.innerHTML = `<span class="label">${line.id} · ${line.start.toFixed(2)}${line.flags.length ? " · " + line.flags.join(",") : ""}</span>`;
+
+    const tools = document.createElement("div");
+    tools.className = "tools";
+    tools.append(
+      toolButton(line.pinned ? "📌 pinned" : "pin", () => edit({op:"pin", line:line.id, value:!line.pinned})),
+      toolButton(line.sung ? "mute" : "🔇 muted", () => edit({op:"mute", line:line.id, value:!line.sung})),
+    );
+    block.append(tools);
+
+    for (const word of line.words) {
+      if (word.start == null) continue;
+      const el = document.createElement("div");
+      el.className = "word" + (word.manual ? " manual" : "");
+      el.style.left = (word.start - line.start) * pps + "px";
+      el.style.width = Math.max(16, (word.end - word.start) * pps) + "px";
+      el.textContent = word.text;
+      // The chip is as wide as the word is long in time, which at a normal zoom
+      // is narrower than the word itself.
+      el.title = `${word.text}  ${word.start.toFixed(2)}–${word.end.toFixed(2)}`;
+      el.dataset.word = word.id;
+      el.ondblclick = (event) => { event.stopPropagation(); retype(el, word); };
+      block.append(el);
+    }
+    linesEl.append(block);
+  }
+}
+
+const wordsText = (line) => line.words.map((w) => w.text).join(" ");
+const escapeHtml = (s) => s.replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function toolButton(label, onClick) {
+  const b = document.createElement("button");
+  b.textContent = label;
+  b.onmousedown = (e) => e.stopPropagation();
+  b.onclick = (e) => { e.stopPropagation(); onClick(); };
+  return b;
+}
+
+function select(id) {
+  // Class toggle rather than a re-render: rebuilding the DOM on mousedown
+  // detaches the element the double-click is about to land on, so retyping a
+  // word never fired.
+  selected = id;
+  for (const block of document.querySelectorAll(".lineblock")) {
+    block.classList.toggle("sel", block.dataset.line === id);
+  }
+  for (const row of document.querySelectorAll("#side .row")) {
+    row.classList.toggle("active", row.dataset.line === id);
+  }
+}
+
+async function edit(body) {
+  say("saving…");
+  try {
+    const result = await api("/api/edit", {
+      method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body),
+    });
+    state = result;
+    undoDepth = result.undo_depth ?? undoDepth;
+    $("#undo").disabled = undoDepth === 0;
+    render();
+    say(result.edit.description + ` · ${state.suspicious.length} still flagged`, "good");
+  } catch (err) {
+    // A refused drag is information, not a failure: the timeline would have
+    // inverted, and the server says which line it collided with.
+    say(err.message, "bad");
+    render();
+  }
+}
+
+function retype(el, word) {
+  const box = el.getBoundingClientRect();
+  const input = document.createElement("input");
+  input.className = "wordedit";
+  input.value = word.text;
+  Object.assign(input.style, {
+    left: box.left + "px", top: box.top + "px", width: Math.max(70, box.width) + "px",
+  });
+  document.body.append(input);
+  input.focus();
+  input.select();
+
+  let done = false;
+  const finish = async (commit) => {
+    if (done) return;
+    done = true;
+    const text = input.value.trim();
+    input.remove();
+    if (!commit || !text || text === word.text) return;
+    await edit({op: "set_text", word: word.id, text});
+  };
+  input.onblur = () => finish(true);
+  input.onkeydown = (event) => {
+    event.stopPropagation();
+    if (event.key === "Enter") finish(true);
+    if (event.key === "Escape") finish(false);
+  };
+}
+
+// ---- dragging -------------------------------------------------------------
+let drag = null;
+
+linesEl.addEventListener("mousedown", (event) => {
+  const wordEl = event.target.closest(".word");
+  const blockEl = event.target.closest(".lineblock");
+  if (!blockEl) return;
+  event.preventDefault();
+  const id = blockEl.dataset.line;
+  select(id);
+  drag = {
+    kind: wordEl ? "word" : "line",
+    id: wordEl ? wordEl.dataset.word : id,
+    element: wordEl || blockEl,
+    originX: event.clientX,
+    startLeft: parseFloat((wordEl || blockEl).style.left),
+    offset: 0,
+  };
+});
+
+window.addEventListener("mousemove", (event) => {
+  if (!drag) return;
+  drag.offset = (event.clientX - drag.originX) / pps;
+  drag.element.style.left = drag.startLeft + drag.offset * pps + "px";
+  say(`${drag.kind} ${drag.id}: ${drag.offset >= 0 ? "+" : ""}${drag.offset.toFixed(2)}s`);
+});
+
+window.addEventListener("mouseup", async () => {
+  if (!drag) return;
+  const moved = drag;
+  drag = null;
+  if (Math.abs(moved.offset) < 0.01) {
+    // A click, not a drag. Put the element back where it was and leave the DOM
+    // alone so a double-click still has something to land on.
+    moved.element.style.left = moved.startLeft + "px";
+    return;
+  }
+  if (moved.kind === "line") {
+    await edit({op: "shift_line", line: moved.id, by: round(moved.offset)});
+  } else {
+    const word = lines().flatMap((l) => l.words).find((w) => w.id === moved.id);
+    await edit({op: "move_word", word: moved.id, to: round(word.start + moved.offset)});
+  }
+});
+
+const round = (v) => Math.round(v * 1000) / 1000;
+
+// ---- transport ------------------------------------------------------------
+function seek(t) { audio.currentTime = Math.max(0, t); tick(); }
+
+$("#play").onclick = () => audio.paused ? audio.play() : audio.pause();
+audio.onplay = () => $("#play").textContent = "❚❚ Pause";
+audio.onpause = () => $("#play").textContent = "▶︎ Play";
+
+scroll.addEventListener("mousedown", (event) => {
+  if (event.target === wave) { follow = false; seek((event.offsetX) / pps); }
+});
+scroll.addEventListener("scroll", () => { if (!audio.paused) follow = false; });
+
+window.addEventListener("keydown", (event) => {
+  if (event.target.tagName === "INPUT") return;
+  if (event.code === "Space") { event.preventDefault(); $("#play").click(); }
+  if ((event.metaKey || event.ctrlKey) && event.key === "z") { event.preventDefault(); $("#undo").click(); }
+  if (event.key === "ArrowLeft") seek(audio.currentTime - (event.shiftKey ? 5 : 1));
+  if (event.key === "ArrowRight") seek(audio.currentTime + (event.shiftKey ? 5 : 1));
+});
+
+$("#undo").onclick = async () => {
+  try {
+    const result = await api("/api/undo", {method: "POST"});
+    state = result; undoDepth = result.undo_depth;
+    $("#undo").disabled = undoDepth === 0;
+    render();
+    say(`undone · ${state.suspicious.length} flagged`, "good");
+  } catch (err) { say(err.message, "bad"); }
+};
+
+$("#zoomin").onclick = () => setZoom(pps * 1.5);
+$("#zoomout").onclick = () => setZoom(pps / 1.5);
+function setZoom(value) {
+  const anchor = audio.currentTime;
+  // Canvas has a hard width limit; past it the waveform silently stops drawing.
+  pps = Math.max(12, Math.min(value, 30000 / Math.max(duration, 1)));
+  layout(); render();
+  scroll.scrollLeft = anchor * pps - scroll.clientWidth / 2;
+}
+
+function tick() {
+  const t = audio.currentTime;
+  head.style.left = t * pps + "px";
+  $("#clock").textContent = `${fmt(t)} / ${fmt(duration)}`;
+  for (const el of document.querySelectorAll(".word")) {
+    const word = lines().flatMap((l) => l.words).find((w) => w.id === el.dataset.word);
+    el.classList.toggle("sung", word && word.start != null && t >= word.start);
+  }
+  if (follow && !audio.paused) {
+    const x = t * pps;
+    if (x < scroll.scrollLeft + 80 || x > scroll.scrollLeft + scroll.clientWidth - 160) {
+      scroll.scrollLeft = x - scroll.clientWidth / 3;
+    }
+  }
+  requestAnimationFrame(tick);
+}
+
+audio.onplay = () => { follow = true; $("#play").textContent = "❚❚ Pause"; };
+load().then(tick).catch((err) => say(err.message, "bad"));
+</script>

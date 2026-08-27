@@ -588,6 +588,50 @@ def fix_mute(
     _apply(song, song_path, edit, dry_run)
 
 
+@app.command("serve")
+def serve_cmd(
+    song_path: SongArg,
+    port: Annotated[int, typer.Option("--port", "-p")] = 8712,
+    host: Annotated[
+        str, typer.Option("--host", help="Leave this alone unless you know why.")
+    ] = "127.0.0.1",
+    separate: Annotated[
+        bool,
+        typer.Option(
+            "--separate/--no-separate",
+            help="Draw the waveform from the isolated vocal rather than the mix.",
+        ),
+    ] = True,
+) -> None:
+    """Open the sync view: drag lines and words onto the waveform."""
+    from .web import WebUnavailableError, serve
+
+    song = _open(song_path)
+    audio_file = _resolve_audio(song, song_path)
+    if audio_file is None:
+        console.print(
+            f"[yellow]note:[/yellow] audio {song.audio.path!r} not found — "
+            "no waveform and no playback"
+        )
+
+    vocals = None
+    if audio_file is not None and separate:
+        from .audio.separate import SeparationError, separate_vocals
+
+        try:
+            with console.status("isolating the vocal for the waveform…", spinner="dots"):
+                vocals = separate_vocals(audio_file).vocals_path
+        except SeparationError as exc:
+            console.print(f"[yellow]note:[/yellow] {exc} — drawing the full mix instead")
+
+    console.print(f"sync view on [bold]http://{host}:{port}[/bold] — editing {song_path}")
+    console.print("[dim]edits are written straight to the file; ctrl-c to stop[/dim]")
+    try:
+        serve(song_path, audio_path=audio_file, vocals_path=vocals, host=host, port=port)
+    except WebUnavailableError as exc:
+        _fail(str(exc))
+
+
 def main() -> None:
     app()
 

@@ -68,6 +68,16 @@ All notable changes to this project are documented here. The format follows
   `--dry-run`. Edited words are marked `manual`, and any edit that would invert
   the timeline is refused with the conflict named rather than written.
 
+- `videokar serve` — the sync view: waveform of the isolated vocal, draggable
+  lines and words, double-click to retype a word the aligner misheard, pin and
+  mute, playback with live highlighting, and undo. Every edit goes through the
+  same operations as `videokar fix`, so the anchor rules and the guards against
+  inverting the timeline are shared rather than reimplemented.
+- Waveform peaks computed from the vocal stem and cached beside it, one byte per
+  bucket at a hundred buckets a second.
+- `set_word_text` recomputes the aligner form and rebuilds the line text, so a
+  correction made in the view leaves nothing for `check` to report as stale.
+
 ### Fixed
 
 - The ball twitched on quick words. It drew one arc per word, and sung words are
