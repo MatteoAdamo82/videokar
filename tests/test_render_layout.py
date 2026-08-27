@@ -89,6 +89,8 @@ def test_an_explicit_size_is_left_alone():
     assert style.resolved_size(style.main) == 99
 
 
-def test_an_explicit_second_voice_style_wins():
-    style = Style(paren=TextStyle(size=99))
+def test_an_explicit_second_voice_size_wins():
+    from videokar.config.schema import VoiceStyle
+
+    style = Style(paren=VoiceStyle(size=99))
     assert style.voice_style("paren").size == 99

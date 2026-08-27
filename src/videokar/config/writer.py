@@ -97,18 +97,10 @@ def to_toml(style: Style | None = None, *, commented: bool = True) -> str:
         section_fields = _fields(kind)
         if not section_fields:
             continue
-        raw = data.get(section)
-        values = raw or {}
-        # An optional section left unset has to stay commented out whole: an
-        # empty [paren] table is not "no second-voice style", it is a second
-        # voice styled exactly like the first.
-        unset = raw is None
-        prefix = "# " if unset else ""
+        values = data.get(section) or {}
         if commented and info.description:
             out += _wrap(info.description)
-        if commented and unset:
-            out += _wrap("Unset. Uncomment this whole block to override it.")
-        out.append(f"{prefix}[{section}]")
+        out.append(f"[{section}]")
         for name, field_info in section_fields.items():
             if commented:
                 if field_info.description:
@@ -116,8 +108,7 @@ def to_toml(style: Style | None = None, *, commented: bool = True) -> str:
                 extra = [note for note in (_choices(field_info), _bounds(field_info)) if note]
                 if extra:
                     out.append(f"# {'  ·  '.join(extra)}")
-            line = _assign(name, values.get(name))
-            out.append(line if not unset else ("# " + line.removeprefix("# ")))
+            out.append(_assign(name, values.get(name)))
             if commented:
                 out.append("")
         if not commented:

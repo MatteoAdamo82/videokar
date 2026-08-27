@@ -103,6 +103,15 @@ All notable changes to this project are documented here. The format follows
 - `videokar serve` now takes an optional document and a `--dir`, so it can start
   on the library rather than needing a document to exist first.
 
+### Changed
+
+- The second voice is configured as a set of overrides rather than a whole
+  second text style. Setting one thing on it — a matching size, say — used to
+  reset everything else to the main voice's values, so the two voices became
+  indistinguishable. `[paren]` now holds only what differs, and gains a `scale`
+  so "same size as the main voice" is one line. An empty `[paren]` block now
+  means "follow the main voice", which is also what it looks like it means.
+
 ### Fixed
 
 - Rendering at anything much smaller than 1080p was broken. Font size followed

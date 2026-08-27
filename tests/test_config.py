@@ -110,11 +110,32 @@ def test_a_written_file_reads_back_the_same(tmp_path):
         assert resolve_style(path) == style
 
 
-def test_an_unset_optional_section_stays_unset_through_a_round_trip(tmp_path):
-    # An empty [paren] table is not "no second-voice style", it is a second
-    # voice styled exactly like the first, so it has to stay commented out.
-    path = write(tmp_path, to_toml(Style()))
-    assert resolve_style(path).paren is None
+def test_an_empty_second_voice_block_means_inherit(tmp_path):
+    # Every override is optional, so an empty [paren] table is "follow the main
+    # voice" rather than "match it exactly" — which is what the old
+    # replace-the-whole-style shape made it mean.
+    path = write(tmp_path, "[paren]\n")
+    style = resolve_style(path)
+    assert style.voice_style("paren").size < style.resolved_size(style.main)
+    assert style.voice_style("paren").colour_on != style.main.colour_on
+
+
+def test_the_second_voice_can_be_told_to_match_the_main_size(tmp_path):
+    # One line, and the colours that tell the voices apart survive it.
+    path = write(tmp_path, "[paren]\nscale = 1.0\n")
+    style = resolve_style(path)
+    paren = style.voice_style("paren")
+    assert paren.size == style.resolved_size(style.main)
+    assert paren.colour_on != style.main.colour_on
+
+
+def test_overriding_one_thing_on_the_second_voice_leaves_the_rest(tmp_path):
+    path = write(tmp_path, '[paren]\ncolour_on = "#ff0000"\n')
+    paren = resolve_style(path).voice_style("paren")
+    assert paren.colour_on == (255, 0, 0, 255)
+    # Still smaller and still dim where it was not asked to change.
+    assert paren.size == 46
+    assert paren.colour_off == (120, 120, 140, 255)
 
 
 def test_an_unset_size_stays_unset_through_a_round_trip(tmp_path):

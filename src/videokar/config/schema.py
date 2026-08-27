@@ -104,6 +104,39 @@ class TextStyle:
     )
 
 
+PAREN_SCALE = 0.72
+PAREN_OFF = (120, 120, 140, 255)
+PAREN_ON = (210, 200, 230, 255)
+
+
+@dataclass(frozen=True)
+class VoiceStyle:
+    """Overrides for the second voice — the lines written in round brackets.
+
+    Every field is optional and empty means "inherit". The starting point is the
+    main voice at PAREN_SCALE and dimmer, so this only has to say what differs.
+
+    An override rather than a second full TextStyle because that was a trap:
+    asking for one thing, say a matching size, silently reset everything else to
+    the main voice's values and the two voices became indistinguishable.
+    """
+
+    font: str | None = None
+    size: int | None = Field(default=None, ge=6, le=600, description="Overrides scale.")
+    scale: float | None = Field(
+        default=None,
+        gt=0.1,
+        le=3.0,
+        description=f"Size relative to the main voice. Empty is {PAREN_SCALE}; 1.0 matches it.",
+    )
+    colour_off: RGBA | None = None
+    colour_on: RGBA | None = None
+    outline: RGBA | None = None
+    outline_width: int | None = Field(default=None, ge=0, le=40)
+    line_spacing: float | None = Field(default=None, gt=0.5, le=3.0)
+    min_scale: float | None = Field(default=None, gt=0.1, le=1.0)
+
+
 @dataclass(frozen=True)
 class BallStyle:
     """The thing that bounces."""
@@ -293,27 +326,50 @@ class Style:
     layout: Layout = field(default_factory=Layout)
     timing: Timing = field(default_factory=Timing)
     main: TextStyle = field(default_factory=TextStyle)
-    paren: TextStyle | None = Field(
-        default=None,
+    paren: VoiceStyle = Field(
+        default_factory=VoiceStyle,
         description=(
-            "The second voice — the parenthesised lines. Empty means: main, one size "
-            "down and dimmer."
+            "The second voice — the parenthesised lines. Only what differs from the "
+            "main voice, which it otherwise follows one size down and dimmer."
         ),
     )
     ball: BallStyle = field(default_factory=BallStyle)
 
     def voice_style(self, voice: str) -> TextStyle:
-        from dataclasses import replace  # noqa: PLC0415
+        """The text style for a voice, with the second voice's overrides applied.
 
+        The second voice starts from the main one, scaled down and dimmed, and
+        the override only replaces what it actually names.
+        """
         if voice != "paren":
             return self.main
-        if self.paren is not None:
-            return self.paren
-        return replace(
+
+        override = self.paren
+        if override.size is not None:
+            size = override.size
+        else:
+            scale = override.scale if override.scale is not None else PAREN_SCALE
+            size = max(6, round(resolved_size(self.main, self.output) * scale))
+
+        named = {
+            field_name: value
+            for field_name in (
+                "font",
+                "colour_off",
+                "colour_on",
+                "outline",
+                "outline_width",
+                "line_spacing",
+                "min_scale",
+            )
+            if (value := getattr(override, field_name)) is not None
+        }
+        return dataclasses.replace(
             self.main,
-            size=int(resolved_size(self.main, self.output) * 0.72),
-            colour_off=(120, 120, 140, 255),
-            colour_on=(210, 200, 230, 255),
+            size=size,
+            colour_off=named.pop("colour_off", PAREN_OFF),
+            colour_on=named.pop("colour_on", PAREN_ON),
+            **named,
         )
 
     def resolved_size(self, style: TextStyle) -> int:

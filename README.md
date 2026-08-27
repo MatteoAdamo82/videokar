@@ -69,9 +69,19 @@ Seven o'clock, she's at the door
   *inside* a section. They are told apart from section tags by whether the tag
   names a song section, and are carried on the lines that follow rather than
   starting a new section.
-* A line wrapped entirely in round brackets is the second voice: it gets its own
-  font, size, colour and position in the config. A line with brackets only in
-  part of it (`(one) and (two)`) stays a normal line.
+* A line wrapped entirely in round brackets is the **second voice**. It follows
+  the main one at 0.72× and dimmer, which is why some lines come out smaller
+  than others — that is the answering vocal, not an accident. A line with
+  brackets only in part of it (`(one) and (two)`) stays a normal line.
+
+  ```toml
+  [paren]
+  scale = 1.0          # same size as the main voice; colours still differ
+  colour_on = "#9be7c4"
+  ```
+
+  `[paren]` holds only what differs. Anything you leave out keeps following the
+  main voice, so changing the size does not quietly take the colours with it.
 
 Punctuation, capitals and accents are preserved for drawing and stripped for
 alignment. Digits are spelled out in English, so `7` matches a sung "seven".
