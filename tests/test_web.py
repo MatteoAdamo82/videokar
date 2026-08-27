@@ -1,3 +1,5 @@
+import time
+
 import pytest
 
 from conftest import make_line, make_song
@@ -172,3 +174,113 @@ def test_a_word_cannot_be_squeezed_to_nothing(client):
 def test_resizing_a_word_moves_the_line_edge_with_it(client):
     client.post("/api/edit", json={"op": "resize_word", "word": "l1.w2", "end": 22.5})
     assert load_song(client.song_path).line("l1").end == pytest.approx(22.5)
+
+
+def test_the_library_lists_documents_and_presets(client, tmp_path):
+    payload = client.get("/api/library").json()
+    assert payload["workdir"] == str(tmp_path)
+    assert [song["name"] for song in payload["songs"]] == ["song.json"]
+    assert "alpha" in payload["presets"]
+
+
+def test_the_library_skips_json_that_is_not_ours(client, tmp_path):
+    (tmp_path / "other.json").write_text('{"unrelated": true}')
+    (tmp_path / "list.json").write_text("[1, 2, 3]")
+    assert [s["name"] for s in client.get("/api/library").json()["songs"]] == ["song.json"]
+
+
+def test_opening_another_document_switches_the_view(client, tmp_path):
+    from conftest import make_line, make_song
+    from videokar.project import save_song
+
+    other = save_song(make_song(make_line("l0", ["x", "y"], 5.0)), tmp_path / "other.json")
+    payload = client.post("/api/open", json={"path": str(other)}).json()
+    assert payload["path"] == str(other)
+    assert client.get("/api/song").json()["path"] == str(other)
+
+
+def test_opening_something_outside_the_folder_is_refused(client, tmp_path):
+    outside = tmp_path.parent / "elsewhere.json"
+    response = client.post("/api/open", json={"path": str(outside)})
+    assert response.status_code == 403
+
+
+def test_opening_a_file_that_will_not_load_is_refused(client, tmp_path):
+    broken = tmp_path / "broken.json"
+    broken.write_text("{nope")
+    assert client.post("/api/open", json={"path": str(broken)}).status_code == 409
+
+
+def test_undo_history_does_not_leak_across_documents(client, tmp_path):
+    from conftest import make_line, make_song
+    from videokar.project import save_song
+
+    client.post("/api/edit", json={"op": "shift_line", "line": "l1", "by": 1.0})
+    other = save_song(make_song(make_line("l0", ["x", "y"], 5.0)), tmp_path / "other.json")
+    client.post("/api/open", json={"path": str(other)})
+    # Undoing here must not reach back into the document that was open before.
+    assert client.post("/api/undo").status_code == 409
+
+
+def test_a_render_needs_a_format_it_can_hand_back(client):
+    response = client.post("/api/render", json={"format": "png"})
+    assert response.status_code == 422
+    assert "PNG sequence" in response.json()["detail"]
+
+
+def test_an_unknown_preset_is_refused(client):
+    assert client.post("/api/render", json={"preset": "nope"}).status_code == 422
+
+
+def test_uploading_something_that_is_not_audio_is_refused(client):
+    response = client.post(
+        "/api/songs",
+        files={"audio": ("notes.txt", b"hello", "text/plain")},
+        data={"lyrics": "hello there"},
+    )
+    assert response.status_code == 422
+    assert "audio file" in response.json()["detail"]
+
+
+def test_uploading_without_lyrics_is_refused(client):
+    response = client.post(
+        "/api/songs",
+        files={"audio": ("song.mp3", b"\x00" * 32, "audio/mpeg")},
+        data={"lyrics": "   "},
+    )
+    assert response.status_code == 422
+
+
+def test_an_upload_starts_a_job_and_keeps_the_file(client, tmp_path):
+    response = client.post(
+        "/api/songs",
+        files={"audio": ("my song.mp3", b"\x00" * 32, "audio/mpeg")},
+        data={"lyrics": "[Verse 1]\nhello there"},
+    )
+    assert response.status_code == 200
+    job = response.json()
+    assert job["kind"] == "align"
+    # The name is sanitised: nothing user-supplied escapes the folder.
+    assert (tmp_path / "my-song.mp3").exists()
+    assert job["document"].endswith("my-song.json")
+
+
+def test_a_job_that_fails_reports_why_rather_than_crashing(client, tmp_path):
+    # Thirty-two zero bytes is not an mp3, so ffprobe will refuse it.
+    job = client.post(
+        "/api/songs",
+        files={"audio": ("bad.mp3", b"\x00" * 32, "audio/mpeg")},
+        data={"lyrics": "[Verse 1]\nhello there"},
+    ).json()
+    for _ in range(200):
+        state = client.get(f"/api/jobs/{job['id']}").json()
+        if state["status"] != "running":
+            break
+        time.sleep(0.05)
+    assert state["status"] == "failed"
+    assert state["error"]
+    assert client.get(f"/api/jobs/{job['id']}/file").status_code == 404
+
+
+def test_an_unknown_job_is_a_404(client):
+    assert client.get("/api/jobs/nope").status_code == 404

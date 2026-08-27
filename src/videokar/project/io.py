@@ -21,6 +21,11 @@ def load_song(path: str | Path) -> Song:
     except json.JSONDecodeError as exc:
         raise ProjectError(f"{path} is not valid JSON: {exc}") from exc
 
+    if not isinstance(payload, dict):
+        # Valid JSON that is not an object at all — some other file that happens
+        # to share the extension. Say so rather than failing on .get().
+        raise ProjectError(f"{path} is JSON but not a videokar document")
+
     version = payload.get("schema")
     if version is not None and version > SCHEMA_VERSION:
         raise ProjectError(

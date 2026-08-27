@@ -94,8 +94,17 @@ More commands land with their pipeline stage: `preview`, `build`, `transcribe`,
 ## The sync view
 
 ```bash
-videokar serve song.json
+videokar serve                 # start on the library, in the current folder
+videokar serve song.json       # or straight into one document
+videokar serve --dir ~/songs   # any folder of documents
 ```
+
+The view is a way in, not just a viewer for something the command line made.
+**Songs** lists the documents in the folder, opens any of them, and takes an
+audio file plus its lyrics to align a new one — the work runs in the background
+with progress, and the document opens when it lands. **Export** renders the
+video, transparent ProRes 4444 by default, and offers it as a download when it
+is done.
 
 A local page on `127.0.0.1:8712` with the waveform of the **isolated vocal**
 behind the lines — the point being that you can see where a phrase actually

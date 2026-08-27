@@ -612,7 +612,14 @@ def fix_mute(
 
 @app.command("serve")
 def serve_cmd(
-    song_path: SongArg,
+    song_path: Annotated[
+        Path | None,
+        typer.Argument(help="Pivot JSON to open. Omit to start on the library."),
+    ] = None,
+    workdir: Annotated[
+        Path | None,
+        typer.Option("--dir", "-d", help="Folder the view lists and writes into."),
+    ] = None,
     port: Annotated[int, typer.Option("--port", "-p")] = 8712,
     host: Annotated[
         str, typer.Option("--host", help="Leave this alone unless you know why.")
@@ -625,31 +632,40 @@ def serve_cmd(
         ),
     ] = True,
 ) -> None:
-    """Open the sync view: drag lines and words onto the waveform."""
+    """Open the sync view: pick a song, fix the timings, export the video."""
     from .web import WebUnavailableError, serve
 
-    song = _open(song_path)
-    audio_file = _resolve_audio(song, song_path)
-    if audio_file is None:
-        console.print(
-            f"[yellow]note:[/yellow] audio {song.audio.path!r} not found — "
-            "no waveform and no playback"
-        )
-
+    audio_file = None
     vocals = None
-    if audio_file is not None and separate:
-        from .audio.separate import SeparationError, separate_vocals
+    if song_path is not None:
+        song = _open(song_path)
+        audio_file = _resolve_audio(song, song_path)
+        if audio_file is None:
+            console.print(
+                f"[yellow]note:[/yellow] audio {song.audio.path!r} not found — "
+                "no waveform and no playback"
+            )
+        elif separate:
+            from .audio.separate import SeparationError, separate_vocals
 
-        try:
-            with console.status("isolating the vocal for the waveform…", spinner="dots"):
-                vocals = separate_vocals(audio_file).vocals_path
-        except SeparationError as exc:
-            console.print(f"[yellow]note:[/yellow] {exc} — drawing the full mix instead")
+            try:
+                with console.status("isolating the vocal for the waveform…", spinner="dots"):
+                    vocals = separate_vocals(audio_file).vocals_path
+            except SeparationError as exc:
+                console.print(f"[yellow]note:[/yellow] {exc} — drawing the full mix instead")
 
-    console.print(f"sync view on [bold]http://{host}:{port}[/bold] — editing {song_path}")
+    base = workdir or (song_path.parent if song_path else Path.cwd())
+    console.print(f"sync view on [bold]http://{host}:{port}[/bold] — folder {base}")
     console.print("[dim]edits are written straight to the file; ctrl-c to stop[/dim]")
     try:
-        serve(song_path, audio_path=audio_file, vocals_path=vocals, host=host, port=port)
+        serve(
+            song_path,
+            audio_path=audio_file,
+            vocals_path=vocals,
+            workdir=base,
+            host=host,
+            port=port,
+        )
     except WebUnavailableError as exc:
         _fail(str(exc))
 

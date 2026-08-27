@@ -96,7 +96,23 @@ All notable changes to this project are documented here. The format follows
   schema of every setting, so an editor can be generated from it rather than
   written by hand against it.
 
+- The sync view became the way in: a library of the documents in a folder,
+  aligning a new song from an uploaded audio file and pasted lyrics, and
+  exporting the video — each of the slow ones running as a background job with
+  progress, and the render offered as a download when it finishes.
+- `videokar serve` now takes an optional document and a `--dir`, so it can start
+  on the library rather than needing a document to exist first.
+
 ### Fixed
+
+- Clicking a line in the sync view moved the clock but not the view, so while
+  paused it looked as though nothing had happened. Seeking now brings the
+  timeline with it.
+- `load_song` raised `AttributeError` on JSON that parsed to something other
+  than an object — which is what any unrelated JSON in the folder does. It now
+  says the file is not a videokar document, which is what lets the library scan
+  a folder safely.
+- A duration of 179.81s displayed as "2:60": the parts were rounded separately.
 
 - `check` kept flagging lines the user had already pinned. A low score is the
   acoustic model's opinion of its own confidence, and pinning is a person

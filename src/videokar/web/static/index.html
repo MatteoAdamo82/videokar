@@ -10,7 +10,8 @@
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--ink);
          font: 13px/1.45 ui-sans-serif, -apple-system, "Segoe UI", sans-serif; }
-  header { display: flex; align-items: center; gap: 14px; padding: 10px 14px;
+  header { display: flex; align-items: center; gap: 10px; row-gap: 8px; flex-wrap: wrap;
+           padding: 10px 14px;
            background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
   button { background: #2b293a; color: var(--ink); border: 1px solid #3a3750;
            border-radius: 6px; padding: 5px 11px; cursor: pointer; font: inherit; }
@@ -80,11 +81,44 @@
   button.on { background: #6f8bff33; border-color: #6f8bff; color: #fff; }
   /* Fixed to the window, not the track: pinned to the track it scrolled out of
      sight the moment you looked at anything past the intro. */
+  .title { color: var(--ink); font-weight: 600; max-width: 220px; overflow: hidden;
+           text-overflow: ellipsis; white-space: nowrap; }
+  #veil { position: fixed; inset: 0; background: #0b0a12cc; z-index: 40;
+          display: none; align-items: flex-start; justify-content: center; padding: 60px 20px; }
+  #veil.open { display: flex; }
+  .sheet { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+           width: min(720px, 100%); max-height: 100%; overflow-y: auto; padding: 20px 22px; }
+  .sheet h1 { font-size: 16px; margin: 0 0 4px; }
+  .sheet h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
+              color: var(--dim); margin: 22px 0 8px; }
+  .sheet p { color: var(--dim); margin: 4px 0 0; }
+  .sheet label { display: block; color: var(--dim); margin: 10px 0 4px; }
+  .sheet input[type=file], .sheet textarea, .sheet select, .sheet input[type=text] {
+    width: 100%; background: #14131c; color: var(--ink); border: 1px solid #3a3750;
+    border-radius: 7px; padding: 8px 10px; font: inherit; }
+  .sheet textarea { min-height: 150px; resize: vertical;
+                    font: 12px/1.5 ui-monospace, SFMono-Regular, monospace; }
+  .sheet .actions { display: flex; gap: 8px; margin-top: 16px; align-items: center; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .item { display: flex; gap: 10px; align-items: baseline; padding: 8px 10px; border-radius: 7px;
+          cursor: pointer; border: 1px solid transparent; }
+  .item:hover { background: #24222f; border-color: #3a3750; }
+  .item.current { border-color: #6f8bff; }
+  .item .meta { color: var(--dim); font-size: 11px; margin-left: auto; white-space: nowrap; }
+  .job { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-top: 8px; }
+  .bar { height: 5px; background: #14131c; border-radius: 3px; overflow: hidden; margin-top: 7px; }
+  .bar i { display: block; height: 100%; background: #6f8bff; width: 0; transition: width .2s; }
+  .job.failed { border-color: var(--bad); }
+  .job.done { border-color: var(--pin); }
+  a.dl { color: #9fb4ff; }
+
   #hint { position: fixed; bottom: 10px; left: 282px; right: 14px; color: var(--dim);
           font-size: 11px; pointer-events: none; text-shadow: 0 0 6px var(--bg); }
 </style>
 
 <header>
+  <button id="library">☰ Songs</button>
+  <span id="title" class="title">—</span>
   <button id="play">▶︎ Play</button>
   <span class="time" id="clock">0:00.00 / 0:00.00</span>
   <button id="loop">↻ Loop</button>
@@ -98,6 +132,7 @@
   </label>
   <button id="zoomout">−</button><button id="zoomin">+</button>
   <button id="undo" disabled>↶ Undo</button>
+  <button id="export">⤓ Export</button>
   <span class="grow"></span>
   <span id="status">loading…</span>
 </header>
@@ -114,6 +149,8 @@
     </div>
   </div>
 </main>
+
+<div id="veil"><div class="sheet" id="sheet"></div></div>
 
 <audio id="audio" preload="auto"></audio>
 
@@ -150,16 +187,26 @@ async function api(path, options) {
 }
 
 async function load() {
-  state = await api("/api/song");
+  setRate(parseFloat($("#speed").value));
+  try {
+    state = await api("/api/song");
+  } catch {
+    // Started on the library rather than on a document. That is a normal way
+    // in, not an error to shout about.
+    say("no song open yet — pick one, or add one");
+    $("#library").click();
+    return;
+  }
   duration = state.song.audio.duration;
   audio.src = "/api/audio";
-  setRate(parseFloat($("#speed").value));
+  $("#title").textContent = state.song.audio.path.split("/").pop();
   try { peaks = await api("/api/peaks"); } catch { peaks = null; }
-  layout(); render();
-  say(`${state.song.sections.reduce((n,s)=>n+s.lines.length,0)} lines · ${state.suspicious.length} flagged`);
+  layout();
+  render();
+  say(`${lines().length} lines · ${state.suspicious.length} flagged`);
 }
 
-const lines = () => state.song.sections.flatMap((s) => s.lines);
+const lines = () => (state ? state.song.sections.flatMap((s) => s.lines) : []);
 
 function layout() {
   const width = Math.max(900, Math.round(duration * pps));
@@ -200,6 +247,7 @@ function drawWave() {
 
 function render() {
   linesEl.innerHTML = ""; side.innerHTML = "";
+  if (!state) return;
   const flaggedHeading = document.createElement("h2");
   flaggedHeading.textContent = "lines";
   side.append(flaggedHeading);
@@ -210,7 +258,10 @@ function render() {
     row.dataset.line = line.id;
     if (selected === line.id) row.classList.add("active");
     row.innerHTML = `<span class="id">${line.id}</span><span class="txt">${escapeHtml(wordsText(line))}</span>`;
-    row.onclick = () => { if (line.start != null) seek(line.start - 0.4); select(line.id); };
+    row.onclick = () => {
+      select(line.id);
+      if (line.start != null) seek(line.start - 0.4, {centre: true});
+    };
     side.append(row);
     if (line.start == null) continue;
 
@@ -413,8 +464,195 @@ window.addEventListener("mouseup", async () => {
 
 const round = (v) => Math.round(v * 1000) / 1000;
 
+// ---- library, import and export ------------------------------------------
+const veil = $("#veil"), sheet = $("#sheet");
+let jobTimer = null;
+
+function closeSheet() {
+  veil.classList.remove("open");
+  if (jobTimer) { clearInterval(jobTimer); jobTimer = null; }
+}
+veil.onclick = (event) => { if (event.target === veil) closeSheet(); };
+
+function openSheet(html) {
+  sheet.innerHTML = html;
+  veil.classList.add("open");
+}
+
+const esc = escapeHtml;
+const mmss = (s) => {
+  // Round the total, not the seconds: 179.81 rounded per-part reads "2:60".
+  const total = Math.round(s);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+};
+
+$("#library").onclick = async () => {
+  let data;
+  try { data = await api("/api/library"); } catch (err) { return say(err.message, "bad"); }
+  openSheet(`
+    <h1>Songs</h1>
+    <p>${esc(data.workdir)}</p>
+    <h2>open</h2>
+    <div id="songlist">${
+      data.songs.length
+        ? data.songs.map((song) => `
+            <div class="item ${song.path === data.open ? "current" : ""}" data-path="${esc(song.path)}">
+              <span>${esc(song.title)}</span>
+              <span class="meta">${song.lines} lines · ${song.flagged} flagged · ${mmss(song.duration)}</span>
+            </div>`).join("")
+        : "<p>Nothing here yet. Add a song below.</p>"
+    }</div>
+    <h2>new song</h2>
+    <label>audio file<input type="file" id="newaudio" accept="audio/*"></label>
+    <label>lyrics — Suno tags and (second voice) lines are understood
+      <textarea id="newlyrics" placeholder="[Verse 1]&#10;Seven o'clock, she's at the door&#10;(she's not mine, I know)"></textarea>
+    </label>
+    <div class="actions">
+      <button class="primary" id="startalign">Align</button>
+      <label style="margin:0;display:flex;gap:6px;align-items:center">
+        <input type="checkbox" id="sep" checked style="width:auto"> isolate the vocal first
+      </label>
+    </div>
+    <div id="jobs"></div>`);
+
+  for (const item of sheet.querySelectorAll("#songlist .item")) {
+    item.onclick = async () => {
+      try {
+        const result = await api("/api/open", {
+          method: "POST", headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({path: item.dataset.path}),
+        });
+        adopt(result);
+        closeSheet();
+      } catch (err) { say(err.message, "bad"); }
+    };
+  }
+
+  $("#startalign").onclick = async () => {
+    const file = $("#newaudio").files[0];
+    const lyrics = $("#newlyrics").value;
+    if (!file) return say("pick an audio file", "bad");
+    if (!lyrics.trim()) return say("paste the lyrics", "bad");
+    const body = new FormData();
+    body.append("audio", file);
+    body.append("lyrics", lyrics);
+    body.append("separate", $("#sep").checked ? "true" : "false");
+    $("#startalign").disabled = true;
+    try {
+      const job = await api("/api/songs", {method: "POST", body});
+      watchJob(job, async (finished) => {
+        if (finished.status === "done") {
+          const result = await api("/api/open", {
+            method: "POST", headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({path: finished.document}),
+          });
+          adopt(result);
+          closeSheet();
+        }
+      });
+    } catch (err) {
+      say(err.message, "bad");
+    } finally {
+      $("#startalign").disabled = false;
+    }
+  };
+};
+
+$("#export").onclick = async () => {
+  let data;
+  try { data = await api("/api/library"); } catch (err) { return say(err.message, "bad"); }
+  openSheet(`
+    <h1>Export</h1>
+    <p>Rendered next to the document, then offered as a download.</p>
+    <div class="grid">
+      <label>preset
+        <select id="expreset">
+          <option value="alpha">alpha — transparent ProRes 4444</option>
+          ${data.presets.filter((p) => p !== "alpha")
+            .map((p) => `<option value="${p}">${p}</option>`).join("")}
+        </select>
+      </label>
+      <label>frame rate<select id="expfps">
+        <option value="">from the preset</option><option>24</option><option>25</option>
+        <option>30</option><option>50</option><option>60</option>
+      </select></label>
+    </div>
+    <div class="actions"><button class="primary" id="startrender">Render</button></div>
+    <div id="jobs"></div>`);
+
+  $("#startrender").onclick = async () => {
+    $("#startrender").disabled = true;
+    const fps = $("#expfps").value;
+    try {
+      const job = await api("/api/render", {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({preset: $("#expreset").value, fps: fps ? Number(fps) : null}),
+      });
+      watchJob(job);
+    } catch (err) {
+      say(err.message, "bad");
+    } finally {
+      $("#startrender").disabled = false;
+    }
+  };
+};
+
+function watchJob(job, onFinish) {
+  const box = $("#jobs");
+  if (!box) return;
+  const draw = (state) => {
+    const pct = state.progress >= 0 ? Math.round(state.progress * 100) : null;
+    box.innerHTML = `
+      <div class="job ${state.status}">
+        <div><b>${esc(state.label)}</b> — ${esc(state.error || state.message || state.status)}</div>
+        ${pct === null ? "" : `<div class="bar"><i style="width:${pct}%"></i></div>`}
+        ${state.status === "done" && state.result
+          ? `<p><a class="dl" href="/api/jobs/${state.id}/file" download>download ${esc(state.result)}</a></p>`
+          : ""}
+      </div>`;
+  };
+  draw(job);
+  if (jobTimer) clearInterval(jobTimer);
+  jobTimer = setInterval(async () => {
+    let state;
+    try { state = await api(`/api/jobs/${job.id}`); } catch { return; }
+    draw({...job, ...state});
+    if (state.status !== "running") {
+      clearInterval(jobTimer);
+      jobTimer = null;
+      say(state.status === "done" ? `${state.label} ready` : state.error,
+          state.status === "done" ? "good" : "bad");
+      if (onFinish) onFinish({...job, ...state});
+    }
+  }, 700);
+}
+
+function adopt(result) {
+  state = result;
+  duration = state.song.audio.duration;
+  audio.src = "/api/audio?" + Date.now();
+  selected = null;
+  undoDepth = 0;
+  $("#undo").disabled = true;
+  $("#title").textContent = state.song.audio.path.split("/").pop();
+  peaks = null;
+  api("/api/peaks").then((p) => { peaks = p; layout(); render(); }).catch(() => {});
+  layout();
+  render();
+  say(`${lines().length} lines · ${state.suspicious.length} flagged`);
+}
+
 // ---- transport ------------------------------------------------------------
-function seek(t) { audio.currentTime = Math.max(0, t); tick(); }
+function seek(t, { centre = false } = {}) {
+  audio.currentTime = Math.max(0, t);
+  // Moving the clock without moving the view looks like nothing happened, which
+  // is exactly how clicking a line used to feel while paused.
+  const x = audio.currentTime * pps;
+  if (centre || x < scroll.scrollLeft + 40 || x > scroll.scrollLeft + scroll.clientWidth - 40) {
+    scroll.scrollLeft = Math.max(0, x - scroll.clientWidth / 3);
+  }
+  tick();
+}
 
 $("#loop").onclick = () => {
   loopOn = !loopOn;
@@ -458,6 +696,7 @@ window.addEventListener("keydown", (event) => {
   if (event.key === "ArrowRight") seek(audio.currentTime + (event.shiftKey ? 5 : 1));
   // Step through the speeds without reaching for the menu.
   if (event.key === "l") { $("#loop").click(); }
+  if (event.key === "Escape") closeSheet();
   if (event.key === "[" || event.key === "]") {
     const rates = [0.25, 0.5, 0.75, 1];
     const at = rates.indexOf(audio.playbackRate);
@@ -488,6 +727,7 @@ function setZoom(value) {
 }
 
 function tick() {
+  if (!state) { requestAnimationFrame(tick); return; }
   const t = audio.currentTime;
   const bounds = loopBounds();
   // Only the far edge is enforced. Scrubbing to somewhere before the loop is a

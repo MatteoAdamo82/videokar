@@ -129,3 +129,11 @@ def test_pinning_a_line_stops_check_nagging_about_its_score():
     assert song.line("l0").flags == []
     # The score itself is still recorded — it just is not raised as a problem.
     assert song.line("l0").score == pytest.approx(0.01)
+
+
+def test_json_that_is_not_an_object_is_refused_clearly(tmp_path):
+    # A folder can hold other JSON; scanning one must not raise AttributeError.
+    path = tmp_path / "notes.json"
+    path.write_text('[{"anything": 1}]')
+    with pytest.raises(ProjectError, match="not a videokar document"):
+        load_song(path)
