@@ -233,6 +233,18 @@ The settings are a typed schema, not a free-form file: `videokar config show
 what will let the sync view build its own controls from the same definitions
 rather than a hand-written form that drifts out of step.
 
+**The ball can be a PNG.** Anything with transparency — a cotton tuft, a paw, a
+logo. It is measured on what is actually drawn rather than on the file's canvas,
+so an export with transparent margins comes out the size you asked for instead
+of quietly smaller, and it lands on exactly the point the circle would have.
+
+```bash
+videokar render song.json --sprite paw.png --sprite-scale 2
+```
+
+`assets/sprites/cotton.png` is there to try it with. In the sync view, the
+export dialog lists the PNGs in the folder and takes new ones.
+
 **The ball bounces on beats, not on words.** Sung words run together — on the
 reference track 41% of the gaps between words are under a third of a second and
 the quickest, "I" to "know", is 20ms, half a frame at 25fps. A full arc in that

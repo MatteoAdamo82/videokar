@@ -112,7 +112,15 @@ All notable changes to this project are documented here. The format follows
   fixed handful, so the page can offer a control without the server learning its
   name.
 
+- The bouncing thing can be a PNG with transparency, from `--sprite`, the config
+  file, or the export dialog in the sync view, which lists the PNGs in the
+  working folder and accepts new ones. Sized on the visible pixels rather than
+  the file's canvas, and centred on the point the circle would have occupied, so
+  swapping one for the other does not move the bounce.
+
 ### Fixed
+
+- `kind = "sprite"` was in the schema from the start and drew nothing at all.
 
 - Fractional frame rates were impossible: `fps` was an integer, so 23.976 and
   29.97 — the rates most editing timelines actually use — were refused outright.

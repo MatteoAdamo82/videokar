@@ -172,6 +172,7 @@ def create_app(
             "open": str(session.song_path) if session.song_path else None,
             "songs": [entry.as_dict() for entry in library.scan(session.workdir)],
             "presets": available_presets(),
+            "sprites": library.sprites(session.workdir),
         }
 
     @app.post("/api/open")
@@ -282,12 +283,43 @@ def create_app(
         job.extra["document"] = str(document)
         return job.as_dict()
 
+    @app.post("/api/sprites")
+    async def add_sprite(image: UploadFile = File(...)) -> dict[str, Any]:
+        """Take a PNG to bounce instead of the circle."""
+        name = library.safe_name(image.filename or "sprite.png")
+        if Path(name).suffix.lower() not in library.SPRITE_SUFFIXES:
+            raise HTTPException(422, "the bouncing thing has to be a PNG, for the transparency")
+        session.workdir.mkdir(parents=True, exist_ok=True)
+        destination = session.workdir / name
+        size = 0
+        with open(destination, "wb") as handle:
+            while chunk := await image.read(1 << 20):
+                size += len(chunk)
+                if size > MAX_UPLOAD:
+                    handle.close()
+                    destination.unlink(missing_ok=True)
+                    raise HTTPException(413, "that file is larger than 200 MB")
+                handle.write(chunk)
+
+        from ..render.sprites import SpriteError, load_sprite  # noqa: PLC0415
+
+        try:
+            load_sprite(str(destination), 32)
+        except SpriteError as exc:
+            destination.unlink(missing_ok=True)
+            raise HTTPException(422, str(exc)) from exc
+        return {"name": name, "sprites": library.sprites(session.workdir)}
+
+    @app.get("/api/sprites/{name}")
+    def get_sprite(name: str) -> Any:
+        return FileResponse(_sprite_path(session, name))
+
     @app.post("/api/render")
     def start_render(request: RenderRequest) -> dict[str, Any]:
         path = current()
         song = load_song(path)
         try:
-            style = _style_for(request)
+            style = _style_for(request, session)
         except ConfigError as exc:
             raise HTTPException(422, str(exc)) from exc
 
@@ -333,6 +365,8 @@ def create_app(
         margin_y: int | None = None,
         margin_x: int | None = None,
         paren_scale: float | None = None,
+        sprite: str | None = None,
+        sprite_scale: float | None = None,
     ) -> Any:
         """One frame, small, so a setting can be judged before a render.
 
@@ -350,14 +384,24 @@ def create_app(
             overrides["layout"]["margin_x"] = margin_x
         if paren_scale is not None:
             overrides["paren"]["scale"] = paren_scale
+        if sprite:
+            overrides["ball"] = {
+                "kind": "sprite",
+                "sprite": str(_sprite_path(session, sprite)),
+                **({"sprite_scale": sprite_scale} if sprite_scale is not None else {}),
+            }
         try:
             style = resolve_style(preset=preset, overrides=overrides)
         except ConfigError as exc:
             raise HTTPException(422, str(exc)) from exc
 
         from ..render import FrameRenderer  # noqa: PLC0415
+        from ..render.sprites import SpriteError  # noqa: PLC0415
 
-        frame = FrameRenderer(song, style).frame(at)
+        try:
+            frame = FrameRenderer(song, style).frame(at)
+        except SpriteError as exc:
+            raise HTTPException(422, str(exc)) from exc
         # Composited onto the background it would be encoded onto, so a
         # transparent overlay is judged the way it will be seen.
         red, green, blue, _ = style.output.background
@@ -400,9 +444,28 @@ def create_app(
     return app
 
 
-def _style_for(request: RenderRequest):
+def _sprite_path(session: Session, name: str) -> Path:
+    """A sprite from the working directory, and nowhere else."""
+    from fastapi import HTTPException  # noqa: PLC0415
+
+    if name != Path(name).name:
+        raise HTTPException(403, "that is not a name in this folder")
+    path = session.workdir / name
+    if not path.is_file():
+        raise HTTPException(404, f"{name} is not there")
+    return path
+
+
+def _style_for(request: RenderRequest, session: Session | None = None):
     """The style a render request asks for, presets and overrides resolved."""
     overrides: dict[str, Any] = dict(request.overrides or {})
+    ball = dict(overrides.get("ball") or {})
+    if session is not None and ball.get("sprite"):
+        # The page sends a bare filename; it only ever names something in the
+        # folder it is working in.
+        ball["sprite"] = str(_sprite_path(session, ball["sprite"]))
+        ball.setdefault("kind", "sprite")
+        overrides["ball"] = ball
     output = dict(overrides.get("output") or {})
     for key, value in (
         ("format", request.format),

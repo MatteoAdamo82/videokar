@@ -607,7 +607,17 @@ $("#export").onclick = async () => {
       <label>second voice — <b id="expparenout">0.72×</b> the main size
         <input type="range" id="expparen" min="50" max="120" value="72">
       </label>
+      <label>what bounces<select id="expsprite">
+        <option value="">a circle</option>
+        ${(data.sprites || []).map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join("")}
+      </select></label>
+      <label>its size — <b id="expspriteout">1.0×</b> the circle
+        <input type="range" id="expspritescale" min="50" max="400" value="100">
+      </label>
     </div>
+    <label>…or add a PNG with transparency
+      <input type="file" id="newsprite" accept="image/png">
+    </label>
     <label style="display:flex;gap:8px;align-items:center;margin-top:14px">
       <input type="checkbox" id="expaudio" checked style="width:auto">
       carry the song in the file — it lines itself up in an editor, and cannot drift from it
@@ -623,12 +633,15 @@ $("#export").onclick = async () => {
     // A percentage of the frame, so the same choice holds at any resolution.
     margin_pct: Number($("#expmargin").value),
     paren_scale: Number($("#expparen").value) / 100,
+    sprite: $("#expsprite").value,
+    sprite_scale: Number($("#expspritescale").value) / 100,
   });
 
   const refresh = () => {
     const s = settings();
     $("#expmarginout").textContent = `${s.margin_pct}%`;
     $("#expparenout").textContent = `${s.paren_scale.toFixed(2)}×`;
+    $("#expspriteout").textContent = `${s.sprite_scale.toFixed(1)}×`;
     const height = presetHeight(s.preset);
     const query = new URLSearchParams({
       at: previewTime().toFixed(2),
@@ -637,12 +650,36 @@ $("#export").onclick = async () => {
       margin_y: Math.round(height * s.margin_pct / 100),
       paren_scale: s.paren_scale,
     });
+    if (s.sprite) {
+      query.set("sprite", s.sprite);
+      query.set("sprite_scale", s.sprite_scale);
+    }
     $("#preview").src = "/api/frame?" + query;
   };
-  for (const id of ["expreset", "expanchor", "expmargin", "expparen"]) {
+  for (const id of ["expreset", "expanchor", "expmargin", "expparen", "expsprite",
+                    "expspritescale"]) {
     $("#" + id).oninput = refresh;
   }
   refresh();
+
+  $("#newsprite").onchange = async () => {
+    const file = $("#newsprite").files[0];
+    if (!file) return;
+    const body = new FormData();
+    body.append("image", file);
+    try {
+      const result = await api("/api/sprites", {method: "POST", body});
+      const picker = $("#expsprite");
+      picker.innerHTML = `<option value="">a circle</option>` +
+        result.sprites.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
+      picker.value = result.name;
+      data.sprites = result.sprites;
+      refresh();
+      say(`${result.name} added`, "good");
+    } catch (err) {
+      say(err.message, "bad");
+    }
+  };
 
   $("#startrender").onclick = async () => {
     $("#startrender").disabled = true;
@@ -661,6 +698,9 @@ $("#export").onclick = async () => {
               margin_y: Math.round(presetHeight(s.preset) * s.margin_pct / 100),
             },
             paren: {scale: s.paren_scale},
+            ...(s.sprite
+              ? {ball: {kind: "sprite", sprite: s.sprite, sprite_scale: s.sprite_scale}}
+              : {}),
           },
         }),
       });

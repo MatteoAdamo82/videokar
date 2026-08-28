@@ -299,6 +299,13 @@ def render_cmd(
         float | None,
         typer.Option("--min-scale", help="Let a too-wide line shrink this far before wrapping."),
     ] = None,
+    sprite: Annotated[
+        Path | None,
+        typer.Option("--sprite", help="PNG with alpha to bounce instead of the circle."),
+    ] = None,
+    sprite_scale: Annotated[
+        float | None, typer.Option("--sprite-scale", help="Size relative to the circle.")
+    ] = None,
     audio: Annotated[
         bool | None, typer.Option("--audio/--no-audio", help="Mux the original audio in.")
     ] = None,
@@ -313,6 +320,7 @@ def render_cmd(
     from .config import ConfigError, resolve_style
     from .render import CODECS, EncodeError, FontError, FrameRenderer
     from .render.encode import render_png_sequence, render_segmented
+    from .render.sprites import SpriteError
 
     # Command-line flags are the last layer over presets and the file, so an
     # unset flag has to be absent rather than a default that silently wins.
@@ -330,6 +338,13 @@ def render_cmd(
         ),
         "main": _without_none(
             {"font": str(font) if font else None, "size": font_size, "min_scale": min_scale}
+        ),
+        "ball": _without_none(
+            {
+                "kind": "sprite" if sprite else None,
+                "sprite": str(sprite) if sprite else None,
+                "sprite_scale": sprite_scale,
+            }
         ),
     }
 
@@ -353,7 +368,7 @@ def render_cmd(
 
     try:
         renderer = FrameRenderer(song, style)
-    except FontError as exc:
+    except (FontError, SpriteError) as exc:
         _fail(str(exc))
     if not renderer.cues:
         _fail("nothing to draw — every line is unsung or untimed")

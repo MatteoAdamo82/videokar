@@ -366,3 +366,83 @@ def test_an_override_does_not_lose_the_named_output_fields(client):
         RenderRequest(preset="alpha", fps=48, overrides={"output": {"width": 640}})
     )
     assert (style.output.fps, style.output.width, style.output.format) == (48, 640, "prores4444")
+
+
+@pytest.fixture
+def a_sprite(tmp_path):
+    from PIL import Image
+
+    image = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+    for x in range(16, 48):
+        for y in range(16, 48):
+            image.putpixel((x, y), (0, 255, 0, 255))
+    path = tmp_path / "blob.png"
+    image.save(path)
+    return path
+
+
+def test_the_library_lists_the_pngs_it_could_bounce(client, a_sprite):
+    assert client.get("/api/library").json()["sprites"] == ["blob.png"]
+
+
+def test_a_sprite_can_be_uploaded(client, tmp_path):
+    import io
+
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    Image.new("RGBA", (32, 32), (255, 0, 0, 255)).save(buffer, format="PNG")
+    response = client.post(
+        "/api/sprites", files={"image": ("my ball.png", buffer.getvalue(), "image/png")}
+    )
+    assert response.status_code == 200
+    assert response.json()["name"] == "my-ball.png"
+    assert (tmp_path / "my-ball.png").exists()
+
+
+def test_something_that_is_not_a_png_is_refused(client):
+    response = client.post(
+        "/api/sprites", files={"image": ("thing.jpg", b"\xff\xd8\xff", "image/jpeg")}
+    )
+    assert response.status_code == 422
+    assert "PNG" in response.json()["detail"]
+
+
+def test_a_png_that_is_not_an_image_is_refused_and_not_kept(client, tmp_path):
+    response = client.post(
+        "/api/sprites", files={"image": ("broken.png", b"not a png at all", "image/png")}
+    )
+    assert response.status_code == 422
+    assert not (tmp_path / "broken.png").exists()
+
+
+def test_the_preview_can_bounce_a_sprite(client, a_sprite):
+    circle = client.get("/api/frame", params={"at": 20.5}).content
+    blob = client.get("/api/frame", params={"at": 20.5, "sprite": "blob.png"}).content
+    assert circle != blob
+
+
+def test_a_sprite_that_is_not_there_says_so(client):
+    response = client.get("/api/frame", params={"at": 20.5, "sprite": "nope.png"})
+    assert response.status_code == 404
+
+
+def test_a_sprite_name_cannot_walk_out_of_the_folder(client):
+    response = client.get("/api/frame", params={"at": 20.5, "sprite": "../secret.png"})
+    assert response.status_code in (403, 404)
+
+
+def test_a_render_can_bounce_a_sprite(client, a_sprite):
+    response = client.post(
+        "/api/render",
+        json={"preset": "alpha", "overrides": {"ball": {"sprite": "blob.png"}}},
+    )
+    assert response.status_code == 200
+
+
+def test_a_render_with_a_sprite_outside_the_folder_is_refused(client):
+    response = client.post(
+        "/api/render",
+        json={"overrides": {"ball": {"sprite": "/etc/passwd"}}},
+    )
+    assert response.status_code in (403, 404)

@@ -5,6 +5,7 @@ from .encode import CODECS, EncodeError, render_frames, render_png_sequence, ren
 from .fonts import FontError, resolve_font_path
 from .frames import FrameRenderer
 from .layout import LineLayout, layout_line
+from .sprites import SpriteError, load_sprite
 
 __all__ = [
     "CODECS",
@@ -16,10 +17,12 @@ __all__ = [
     "Layout",
     "LineLayout",
     "Output",
+    "SpriteError",
     "Style",
     "TextStyle",
     "Timing",
     "layout_line",
+    "load_sprite",
     "render_frames",
     "render_png_sequence",
     "render_segmented",

@@ -20,6 +20,7 @@ from ..project.io import ProjectError
 logger = logging.getLogger(__name__)
 
 AUDIO_SUFFIXES = {".mp3", ".wav", ".aif", ".aiff", ".m4a", ".flac", ".ogg"}
+SPRITE_SUFFIXES = {".png"}
 _SAFE = re.compile(r"[^A-Za-z0-9._-]+")
 
 
@@ -103,3 +104,12 @@ def align_to_document(
     flagged = sum(1 for line in song.lines if Flag.LOW_SCORE.value in line.flags or line.flags)
     step(f"{len(song.words)} words over {len(song.lines)} lines, {flagged} flagged", 1.0)
     return destination
+
+
+def sprites(directory: Path) -> list[str]:
+    """PNGs in the working directory, offered as things to bounce."""
+    return sorted(
+        path.name
+        for path in directory.glob("*.png")
+        if path.is_file() and path.stat().st_size > 0
+    )

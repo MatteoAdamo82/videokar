@@ -16,6 +16,7 @@ from ..config.schema import RGBA, Ball, Style, resolved_ball
 from ..project.model import Line, Song
 from .ball import ball_position
 from .layout import LineLayout, layout_line
+from .sprites import SpriteError, load_sprite
 
 
 def _fade(colour: RGBA, opacity: float) -> RGBA:
@@ -57,6 +58,12 @@ class FrameRenderer:
     def __init__(self, song: Song, style: Style | None = None) -> None:
         self.song = song
         self.style = style or Style()
+        if self.style.ball.kind == "sprite":
+            if not self.style.ball.sprite:
+                raise SpriteError("the ball is set to 'sprite' but no image was given")
+            # Fail here rather than on the first frame that wants it, which
+            # would be minutes into a render.
+            load_sprite(self.style.ball.sprite, 32)
         self.cues = self._build_cues()
         self._starts = [cue.appears for cue in self.cues]
 
@@ -150,7 +157,23 @@ class FrameRenderer:
 
         ball = cue.ball
         position = ball_position(time, cue.layout, ball)
-        if position is not None and ball.kind == "ball":
+        if position is None:
+            return image
+        alpha = opacity * position.opacity
+
+        if ball.kind == "sprite":
+            sprite = load_sprite(ball.sprite, max(1, round(ball.radius * 2 * ball.sprite_scale)))
+            if alpha < 1.0:
+                faded = sprite.copy()
+                faded.putalpha(faded.getchannel("A").point(lambda v: int(v * alpha)))
+                sprite = faded
+            # Centred on the same point the circle would have been drawn at, so
+            # swapping one for the other does not move the bounce.
+            image.alpha_composite(
+                sprite,
+                (round(position.x - sprite.width / 2), round(position.y - sprite.height / 2)),
+            )
+        elif ball.kind == "ball":
             radius = ball.radius
             draw.ellipse(
                 (
@@ -159,6 +182,6 @@ class FrameRenderer:
                     position.x + radius,
                     position.y + radius,
                 ),
-                fill=_fade(ball.colour, opacity * position.opacity),
+                fill=_fade(ball.colour, alpha),
             )
         return image
