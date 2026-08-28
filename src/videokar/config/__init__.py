@@ -2,7 +2,7 @@
 
 from .loader import ConfigError, available_presets, resolve_style, style_schema, to_dict
 from .schema import BallStyle, Layout, Output, Style, TextStyle, Timing, VoiceStyle
-from .writer import to_toml
+from .writer import to_partial_toml, to_toml
 
 __all__ = [
     "BallStyle",
@@ -17,5 +17,6 @@ __all__ = [
     "resolve_style",
     "style_schema",
     "to_dict",
+    "to_partial_toml",
     "to_toml",
 ]

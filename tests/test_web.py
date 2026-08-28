@@ -472,3 +472,46 @@ def test_the_page_says_which_version_it_is(client):
     body = client.get("/").text
     assert "{{version}}" not in body
     assert __version__ in body
+
+
+def test_no_settings_saved_yet_is_not_an_error(client):
+    payload = client.get("/api/style").json()
+    assert payload["saved"] is False
+    assert payload["overrides"] == {}
+
+
+def test_settings_are_remembered_between_visits(client, tmp_path):
+    body = {
+        "preset": "alpha",
+        "overrides": {"layout": {"anchor": "bottom", "margin_y": 540}, "ball": {"squash": 0.3}},
+    }
+    assert client.post("/api/style", json=body).status_code == 200
+
+    payload = client.get("/api/style").json()
+    assert payload["saved"] is True
+    assert payload["preset"] == "alpha"
+    assert payload["overrides"]["layout"]["margin_y"] == 540
+    assert payload["overrides"]["ball"]["squash"] == 0.3
+
+
+def test_the_settings_land_in_the_file_the_cli_reads(client, tmp_path):
+    from videokar.config import resolve_style
+
+    client.post(
+        "/api/style",
+        json={"preset": "alpha", "overrides": {"layout": {"margin_y": 540}}},
+    )
+    written = tmp_path / "videokar.toml"
+    assert written.exists()
+    # The same file `videokar render -c` takes, so the view is reproducible.
+    style = resolve_style(written)
+    assert style.layout.margin_y == 540
+    assert style.output.format == "prores4444"
+
+
+def test_settings_the_schema_refuses_are_not_written(client, tmp_path):
+    response = client.post(
+        "/api/style", json={"overrides": {"layout": {"anchor": "sideways"}}}
+    )
+    assert response.status_code == 422
+    assert not (tmp_path / "videokar.toml").exists()

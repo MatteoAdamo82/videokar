@@ -125,7 +125,16 @@ All notable changes to this project are documented here. The format follows
 - `[ball] squash` stretches the ball along its direction of travel and squashes
   it across, area preserved. Off by default, and offered in the export dialog.
 
+- The export dialog remembers. Rendering writes the choices to `videokar.toml`
+  in the working folder and the dialog restores them next time — kept beside the
+  song rather than in the browser, so a reload, a different machine or a hand
+  edit all keep working, and the same file is what `videokar render -c` reads.
+- The distance-from-the-edge control goes to 70% of the frame rather than 30%.
+
 ### Fixed
+
+- A margin larger than the frame pushed the words out of the picture and
+  rendered a video with nothing on it. The block is held inside the frame.
 
 - The sync view sent no cache headers at all, so a browser was free to cache it
   heuristically and keep running an older page against an updated server — which

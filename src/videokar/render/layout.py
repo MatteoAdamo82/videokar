@@ -126,6 +126,11 @@ def layout_line(line: Line, style: TextStyle, layout: Layout, output: Output) ->
     else:
         top = output.height - inset_y - margin_y - block_height
 
+    # A margin larger than the frame would push the words out of the picture, and
+    # a video with nothing drawn on it is never what the setting meant to ask
+    # for. Held inside instead, which the preview then shows.
+    top = min(max(top, 0.0), max(0.0, output.height - block_height))
+
     space = _advance(font, " ")
     placed: list[PlacedWord] = []
     for row_index, row in enumerate(rows):

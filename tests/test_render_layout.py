@@ -94,3 +94,17 @@ def test_an_explicit_second_voice_size_wins():
 
     style = Style(paren=VoiceStyle(size=99))
     assert style.voice_style("paren").size == 99
+
+
+def test_a_margin_larger_than_the_frame_keeps_the_words_in_it():
+    # A setting that silently renders an empty video is never what was meant.
+    # 1500 is inside what the schema allows but far outside a 600px frame.
+    result = lay(["one"], layout=Layout(anchor="bottom", margin_y=1500, safe_area=0.0))
+    assert result.words[0].y >= 0
+    assert result.words[0].y + result.words[0].height <= OUTPUT.height
+
+
+def test_a_large_margin_still_moves_the_words_up():
+    low = lay(["one"], layout=Layout(anchor="bottom", margin_y=50, safe_area=0.0))
+    high = lay(["one"], layout=Layout(anchor="bottom", margin_y=400, safe_area=0.0))
+    assert high.words[0].y < low.words[0].y

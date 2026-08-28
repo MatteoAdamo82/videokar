@@ -25,7 +25,8 @@ from pydantic import BaseModel
 
 from .. import __version__
 from ..audio.peaks import peaks_for
-from ..config import ConfigError, available_presets, resolve_style
+from ..config import ConfigError, available_presets, resolve_style, to_partial_toml
+from ..config.loader import read_toml
 from ..project import check_song, load_song, save_song
 from ..project.edit import (
     FixError,
@@ -49,6 +50,10 @@ STATIC = Path(__file__).parent / "static"
 MAX_UPLOAD = 200 * 1024 * 1024
 """Refuse anything past this rather than filling the disk with a mistake."""
 
+SETTINGS = "videokar.toml"
+"""Where the export dialog keeps its choices — the same file the CLI reads, so
+what the view produces can be reproduced from a terminal."""
+
 UNDO_DEPTH = 50
 """How many edits back you can step. Documents are small; fifty is plenty and
 still nothing next to the audio already in memory."""
@@ -67,6 +72,13 @@ class RenderRequest(BaseModel):
 
 class OpenRequest(BaseModel):
     path: str
+
+
+class StyleRequest(BaseModel):
+    """What the export dialog wants remembered."""
+
+    preset: str | None = None
+    overrides: dict[str, Any] = {}
 
 
 class EditRequest(BaseModel):
@@ -203,6 +215,30 @@ def create_app(
         except (OSError, ProjectError) as exc:
             raise HTTPException(409, str(exc)) from exc
         return _payload(load_song(path), path)
+
+    @app.get("/api/style")
+    def get_style() -> dict[str, Any]:
+        """The choices last saved in this folder, for the dialog to restore."""
+        path = session.workdir / SETTINGS
+        if not path.is_file():
+            return {"path": str(path), "saved": False, "preset": None, "overrides": {}}
+        try:
+            data = read_toml(path)
+        except ConfigError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        preset = data.pop("preset", None)
+        return {"path": str(path), "saved": True, "preset": preset, "overrides": data}
+
+    @app.post("/api/style")
+    def save_style(request: StyleRequest) -> dict[str, Any]:
+        """Remember them, as a file the CLI can render from too."""
+        try:
+            resolve_style(preset=request.preset, overrides=request.overrides)
+        except ConfigError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        path = session.workdir / SETTINGS
+        path.write_text(to_partial_toml(request.preset, request.overrides), encoding="utf-8")
+        return {"path": str(path), "saved": True}
 
     @app.get("/api/peaks")
     def get_peaks() -> dict[str, Any]:

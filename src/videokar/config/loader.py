@@ -28,7 +28,7 @@ def available_presets() -> list[str]:
     return sorted(path.stem for path in PRESETS.glob("*.toml"))
 
 
-def _read_toml(path: Path) -> dict[str, Any]:
+def read_toml(path: Path) -> dict[str, Any]:
     try:
         with open(path, "rb") as handle:
             return tomllib.load(handle)
@@ -65,18 +65,18 @@ def resolve_style(
             raise ConfigError(
                 f"unknown preset {preset!r} — one of {', '.join(available_presets())}"
             )
-        layers = merge(layers, _read_toml(PRESETS / f"{preset}.toml"))
+        layers = merge(layers, read_toml(PRESETS / f"{preset}.toml"))
 
     if config_path:
         path = Path(config_path)
         if not path.exists():
             raise ConfigError(f"config file not found: {path}")
-        data = _read_toml(path)
+        data = read_toml(path)
         # A file may name the preset it builds on, so a project keeps one entry
         # point instead of a file plus a flag someone forgets.
         named = data.pop("preset", None)
         if named and not preset:
-            layers = merge(_read_toml(PRESETS / f"{named}.toml"), layers)
+            layers = merge(read_toml(PRESETS / f"{named}.toml"), layers)
         layers = merge(layers, data)
 
     if overrides:

@@ -118,7 +118,15 @@ is done — with **a live preview frame** above the controls, because choosing
 where the words sit and then waiting three minutes to see it is not a way anyone
 can work. Position, distance from the edge and the second voice's size are all
 there; the margin is given as a percentage of the frame, so the same choice
-holds at any resolution.
+holds at any resolution, and it goes up to 70% — past the middle, if that is
+where the words belong. A margin larger than the frame is held inside it rather
+than pushing the words out of the picture.
+
+**The dialog remembers.** Rendering writes the choices to `videokar.toml` in the
+working folder and the dialog restores them next time — from the folder, not
+from the browser, so it survives a reload, another machine, and being edited by
+hand. It is the same file `videokar render -c` reads, so anything set in the
+view can be rendered from a terminal.
 
 A local page on `127.0.0.1:8712` with the waveform of the **isolated vocal**
 behind the lines — the point being that you can see where a phrase actually

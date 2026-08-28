@@ -114,3 +114,27 @@ def to_toml(style: Style | None = None, *, commented: bool = True) -> str:
         if not commented:
             out.append("")
     return "\n".join(out).rstrip() + "\n"
+
+
+def to_partial_toml(preset: str | None, overrides: dict[str, Any]) -> str:
+    """Just the choices, on top of a preset — what the export dialog remembers.
+
+    A whole resolved style would work too, but it bakes the preset in: a later
+    videokar with a better default would not reach a file that spells every
+    value out.
+    """
+    out: list[str] = [
+        "# videokar — written by the export dialog, and read back by it.",
+        "# Hand edits survive: this is the same file `videokar render -c` takes.",
+        "",
+    ]
+    if preset:
+        out += [f'preset = "{preset}"', ""]
+    for section, values in overrides.items():
+        settled = {k: v for k, v in (values or {}).items() if v is not None}
+        if not settled:
+            continue
+        out.append(f"[{section}]")
+        out += [f"{name} = {_format(value)}" for name, value in settled.items()]
+        out.append("")
+    return "\n".join(out).rstrip() + "\n"
