@@ -218,6 +218,17 @@ def check_cmd(
     except (OSError, ProjectError) as exc:
         _fail(str(exc))
 
+    # A document written before onsets existed can still be measured against
+    # them, rather than having to be aligned again for a check.
+    if not song.vocal_onsets:
+        audio_file = _resolve_audio(song, song_path)
+        if audio_file is not None:
+            from .pipeline import onsets_for
+
+            with console.status("finding the vocal attacks…", spinner="dots"):
+                song.vocal_onsets = onsets_for(audio_file)
+            write = True
+
     report = check_song(song, apply=True)
     lines = {line.id: line for line in song.lines}
 
@@ -229,6 +240,7 @@ def check_cmd(
     table.add_column("end", justify="right", no_wrap=True, min_width=7)
     table.add_column("w/s", justify="right", no_wrap=True, min_width=4)
     table.add_column("score", justify="right", no_wrap=True, min_width=5)
+    table.add_column("off", justify="right", no_wrap=True, min_width=6)
     table.add_column("flags", style="yellow", no_wrap=True, min_width=17)
     table.add_column("line", overflow="ellipsis")
 
@@ -244,6 +256,7 @@ def check_cmd(
             f"{line_report.end:.2f}",
             f"{line_report.rate:.1f}",
             f"{line_report.score:.2f}",
+            "—" if line_report.onset_distance is None else f"{line_report.onset_distance:+.2f}",
             ",".join(line_report.flags),
             line.words_text,
         )

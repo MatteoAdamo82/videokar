@@ -82,6 +82,7 @@ def check_song(song: Song, *, apply: bool = False) -> SongReport:
         timings,
         group_count=len(lines),
         regions=regions,
+        onsets=song.vocal_onsets,
         # A pinned line has been listened to and declared right, so the model's
         # opinion of its own confidence is no longer news.
         adjudicated=[index for index, line in enumerate(lines) if line.pinned],

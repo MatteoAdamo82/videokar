@@ -28,7 +28,12 @@ def build_song(track: AlignedTrack, *, audio_path: str | Path | None = None) -> 
     lyrics = track.lyrics
     reports = {
         r.index: r
-        for r in analyse(track.alignment.words, group_count=len(lyrics), regions=track.regions)
+        for r in analyse(
+            track.alignment.words,
+            group_count=len(lyrics),
+            regions=track.regions,
+            onsets=track.onsets,
+        )
     }
 
     timings: dict[int, list] = {}
@@ -88,6 +93,7 @@ def build_song(track: AlignedTrack, *, audio_path: str | Path | None = None) -> 
             elapsed=round(track.elapsed, 2),
         ),
         vocal_regions=[(_round(r.start), _round(r.end)) for r in track.regions],
+        vocal_onsets=list(track.onsets),
         sections=sections,
     )
     song.refresh_bounds()

@@ -351,6 +351,14 @@ checks carry most of the weight.
 The workflow that follows from this is deliberate: align once, look at what got
 flagged, correct it with `fix`, and re-render without re-aligning.
 
+One check is worth calling out. A line can be simply half a second late: an
+ordinary shape, an ordinary score, sitting well inside a vocal region — nothing
+about it looks wrong, and you only find it by watching the video. So the vocal
+attacks are found in the stem and each line's start is measured against the
+nearest one. `check` reports the distance and flags the lines whose distance is
+an outlier for that song. On the reference track it surfaced four lines that
+everything else called clean.
+
 Pinning a line drops its low-score flag. That flag is the model's opinion of its
 own confidence, and pinning is you overruling it — leaving it up would bury the
 lines still worth a look under the ones already dealt with.

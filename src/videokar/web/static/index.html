@@ -283,6 +283,11 @@ function render() {
     const row = document.createElement("div");
     row.className = "row" + (state.suspicious.includes(line.id) ? " flagged" : "") + (line.sung ? "" : " muted");
     row.dataset.line = line.id;
+    const off = (state.off_the_attack || {})[line.id];
+    if (line.flags.includes("off_the_attack")) {
+      // Which way to drag it, not merely that something is wrong.
+      row.title = `starts ${off > 0 ? "after" : "before"} the voice comes in, by ${Math.abs(off).toFixed(2)}s`;
+    }
     if (selected === line.id) row.classList.add("active");
     row.innerHTML = `<span class="id">${line.id}</span><span class="txt">${escapeHtml(wordsText(line))}</span>`;
     row.onclick = () => {
@@ -300,7 +305,11 @@ function render() {
     block.style.left = line.start * pps + "px";
     block.style.width = Math.max(26, (line.end - line.start) * pps) + "px";
     block.dataset.line = line.id;
-    block.innerHTML = `<span class="label">${line.id} · ${line.start.toFixed(2)}${line.flags.length ? " · " + line.flags.join(",") : ""}</span>`;
+    const offBy = (state.off_the_attack || {})[line.id];
+    const offNote = line.flags.includes("off_the_attack")
+      ? ` · ${offBy > 0 ? "+" : ""}${offBy.toFixed(2)}s from the attack` : "";
+    block.innerHTML = `<span class="label">${line.id} · ${line.start.toFixed(2)}${
+      line.flags.length ? " · " + line.flags.join(",") : ""}${offNote}</span>`;
 
     const tools = document.createElement("div");
     tools.className = "tools";

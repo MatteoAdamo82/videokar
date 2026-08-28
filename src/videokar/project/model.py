@@ -165,6 +165,14 @@ class Song(Base):
     """Where the vocal stem says someone is singing. Constrains nothing on its
     own; `check` uses it to spot words placed in an instrumental break."""
 
+    vocal_onsets: list[float] = Field(default_factory=list)
+    """Where the voice attacks — syllable and phrase starts, from the stem.
+
+    Regions say whether anyone is singing; these say when they started, which is
+    what a line's timing has to agree with. A line half a second late sits well
+    inside a region and has a perfectly ordinary shape, so nothing else in the
+    checker can see it."""
+
     sections: list[Section] = Field(default_factory=list)
 
     @property

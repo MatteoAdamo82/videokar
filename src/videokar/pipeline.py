@@ -17,7 +17,7 @@ from .align.base import AlignmentResult
 from .align.mms_fa import MMSForcedAligner
 from .audio import io as audio_io
 from .audio.separate import Separation, separate_vocals
-from .audio.vad import Region, detect_vocal_regions
+from .audio.vad import Region, detect_onsets, detect_vocal_regions
 from .lyrics import ParsedLyrics
 
 logger = logging.getLogger(__name__)
@@ -31,6 +31,9 @@ class AlignedTrack:
     lyrics: ParsedLyrics
     alignment: AlignmentResult
     regions: list[Region]
+    onsets: list[float]
+    """Where the voice attacks, for checking a line's start against."""
+
     separation: Separation | None
     elapsed: float
 
@@ -75,7 +78,10 @@ def run_alignment(
         samples, sample_rate = audio_io.read_wav(mono, mono=True)
 
     regions = detect_vocal_regions(samples, sample_rate)
-    logger.info("%d vocal regions over %.1fs", len(regions), info.duration)
+    onsets = detect_onsets(samples, sample_rate)
+    logger.info(
+        "%d vocal regions and %d attacks over %.1fs", len(regions), len(onsets), info.duration
+    )
 
     result = aligner.align(samples, lyrics.word_groups)
     return AlignedTrack(
@@ -83,6 +89,37 @@ def run_alignment(
         lyrics=lyrics,
         alignment=result,
         regions=regions,
+        onsets=onsets,
         separation=separation,
         elapsed=time.perf_counter() - started,
     )
+
+
+def onsets_for(audio_path: str | Path, *, separate: bool = True) -> list[float]:
+    """Vocal attacks for a track, cached beside its separated vocal.
+
+    So that a document written before onsets existed can still be checked
+    against them without being aligned again.
+    """
+    import json  # noqa: PLC0415
+
+    from .cache import AudioCache  # noqa: PLC0415
+
+    audio_path = Path(audio_path)
+    cache = AudioCache.for_audio(audio_path)
+    entry = "onsets.json"
+    if cache.has(entry):
+        return json.loads(cache.path(entry).read_text(encoding="utf-8"))
+
+    source = audio_path
+    if separate:
+        source = separate_vocals(audio_path).vocals_path
+    with tempfile.TemporaryDirectory(prefix="videokar-onsets-") as workdir:
+        mono = audio_io.decode_to_wav(
+            source, Path(workdir) / "onsets.wav", sample_rate=16_000, mono=True
+        )
+        samples, sample_rate = audio_io.read_wav(mono, mono=True)
+
+    onsets = detect_onsets(samples, sample_rate)
+    cache.path(entry).write_text(json.dumps(onsets), encoding="utf-8")
+    return onsets

@@ -26,7 +26,7 @@ from collections.abc import Collection, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from ..audio.vad import Region, in_any_region
+from ..audio.vad import Region, in_any_region, nearest_onset
 from .base import WordTiming
 
 
@@ -53,6 +53,12 @@ class Flag(StrEnum):
     OVERLAPS_NEXT = "overlaps_next"
     """Ends after the following line starts."""
 
+    OFF_THE_ATTACK = "off_the_attack"
+    """Starts nowhere near a point where the voice actually comes in.
+
+    The one failure the other checks cannot see: a line half a second late has
+    an ordinary shape, an ordinary score, and sits inside a vocal region."""
+
 
 # Sung word rates on the reference track sit between roughly 1.5 and 6 words per
 # second. These bounds are deliberately outside that: they are meant to catch
@@ -63,6 +69,13 @@ MAX_INTERNAL_GAP = 1.5
 SCORE_RATIO = 0.4
 MIN_DURATION_FOR_RATE = 0.8
 VOCAL_TOLERANCE = 0.25
+
+ONSET_RATIO = 3.0
+"""How far from the nearest attack, as a multiple of this song's own median."""
+
+ONSET_FLOOR = 0.5
+"""...but never flag anything closer than this. On a song whose lines all land
+within a few hundredths, three times the median would condemn the lot."""
 
 
 @dataclass(slots=True)
@@ -79,6 +92,9 @@ class LineReport:
 
     max_internal_gap: float
     outside_fraction: float
+    onset_distance: float | None = None
+    """Seconds between the line's start and the nearest vocal attack."""
+
     flags: list[Flag] = field(default_factory=list)
 
     @property
@@ -103,6 +119,7 @@ def analyse(
     *,
     group_count: int,
     regions: Sequence[Region] = (),
+    onsets: Sequence[float] = (),
     adjudicated: Collection[int] = (),
 ) -> list[LineReport]:
     """Score every line and flag the ones that do not look like singing.
@@ -138,8 +155,18 @@ def analyse(
                 rate=round(len(group) / duration, 2) if duration > 0 else 0.0,
                 max_internal_gap=round(max(gaps), 3) if gaps else 0.0,
                 outside_fraction=round(outside, 3),
+                onset_distance=(
+                    round(start - nearest, 3)
+                    if (nearest := nearest_onset(start, list(onsets))) is not None
+                    else None
+                ),
             )
         )
+
+    distances = [abs(r.onset_distance) for r in reports if r.onset_distance is not None]
+    onset_limit = (
+        max(statistics.median(distances) * ONSET_RATIO, ONSET_FLOOR) if distances else None
+    )
 
     settled = set(adjudicated)
     for report, following in zip(reports, reports[1:] + [None], strict=False):
@@ -158,5 +185,12 @@ def analyse(
             report.flags.append(Flag.OUTSIDE_VOCAL)
         if following is not None and report.end > following.start + 1e-6:
             report.flags.append(Flag.OVERLAPS_NEXT)
+        if (
+            onset_limit is not None
+            and report.onset_distance is not None
+            and abs(report.onset_distance) > onset_limit
+            and report.index not in settled
+        ):
+            report.flags.append(Flag.OFF_THE_ATTACK)
 
     return reports

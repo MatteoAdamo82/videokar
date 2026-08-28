@@ -106,6 +106,11 @@ class EditRequest(BaseModel):
 def _payload(song, song_path: Path) -> dict[str, Any]:
     """The document plus the freshly recomputed flags, as the page wants it."""
     report = check_song(song, apply=True)
+    distances = {
+        report.line_ids[line.index]: line.onset_distance
+        for line in report.reports
+        if line.onset_distance is not None
+    }
     return {
         "song": song.model_dump(by_alias=True),
         "path": str(song_path),
@@ -114,6 +119,9 @@ def _payload(song, song_path: Path) -> dict[str, Any]:
             for i in report.issues
         ],
         "suspicious": report.suspicious_line_ids,
+        # How far each line sits from the nearest point the voice comes in, so
+        # the view can say which way to drag it rather than only that it is odd.
+        "off_the_attack": distances,
     }
 
 
@@ -137,6 +145,18 @@ class Session:
         load_song(path)  # refuse to switch to something that will not load
         self.song_path = path
         self.history.clear()
+
+    def ensure_onsets(self, audio: Path | None) -> None:
+        """Fill in the vocal attacks for a document written before they existed."""
+        if self.song_path is None or audio is None:
+            return
+        song = load_song(self.song_path)
+        if song.vocal_onsets:
+            return
+        from ..pipeline import onsets_for  # noqa: PLC0415
+
+        song.vocal_onsets = onsets_for(audio)
+        save_song(song, self.song_path)
 
 
 def _audio_for(song, song_path: Path) -> Path | None:
@@ -195,7 +215,9 @@ def create_app(
 
     @app.get("/api/song")
     def get_song() -> dict[str, Any]:
-        return _payload(load_song(current()), current())
+        path = current()
+        session.ensure_onsets(audio_of(path))
+        return _payload(load_song(path), path)
 
     @app.api_route("/api/library", methods=["GET", "HEAD"])
     def get_library() -> dict[str, Any]:

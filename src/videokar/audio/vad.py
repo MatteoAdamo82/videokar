@@ -13,6 +13,8 @@ the singing. That keeps the dependency list short: no second neural model.
 
 from __future__ import annotations
 
+from bisect import bisect_left
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -142,3 +144,54 @@ def gaps_between(regions: list[Region], duration: float) -> list[Region]:
     if cursor < duration:
         result.append(Region(cursor, duration))
     return result
+
+
+def detect_onsets(
+    samples: np.ndarray,
+    sample_rate: int,
+    *,
+    rise_db: float = 9.0,
+    window: float = 0.06,
+    min_gap: float = 0.12,
+    floor_db: float = -55.0,
+) -> list[float]:
+    """Times where the voice attacks — the starts of syllables and phrases.
+
+    Kept alongside the vocal regions because they answer a different question.
+    Regions say whether anyone is singing at all; onsets say *when* they started,
+    which is what a line's timing has to agree with. A line placed half a second
+    off sits well inside a region and has a perfectly ordinary shape, so nothing
+    else in the checker can see it.
+
+    An onset is a jump of `rise_db` within `window`, no closer than `min_gap` to
+    the last one, above an absolute floor so silence does not produce any.
+    """
+    energy, hop = frame_energy_db(np.ascontiguousarray(samples, dtype=np.float32), sample_rate)
+    if energy.size == 0:
+        return []
+
+    span = max(1, int(round(window / hop)))
+    spacing = max(1, int(round(min_gap / hop)))
+    peak = float(energy.max())
+    gate = max(floor_db, peak - 45.0)
+
+    onsets: list[float] = []
+    last = -spacing
+    for index in range(span, energy.size):
+        if index - last < spacing:
+            continue
+        if energy[index] < gate:
+            continue
+        if energy[index] - energy[index - span] >= rise_db:
+            onsets.append(round(index * hop, 3))
+            last = index
+    return onsets
+
+
+def nearest_onset(time: float, onsets: Sequence[float]) -> float | None:
+    """The onset closest to `time`, or None when there are none."""
+    if not onsets:
+        return None
+    position = bisect_left(onsets, time)
+    candidates = [onsets[i] for i in (position - 1, position) if 0 <= i < len(onsets)]
+    return min(candidates, key=lambda t: abs(t - time)) if candidates else None

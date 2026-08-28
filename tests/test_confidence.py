@@ -125,3 +125,53 @@ def test_adjudicating_one_line_leaves_the_others_flagged():
     reports = analyse(words, group_count=5, adjudicated=[3])
     assert reports[3].flags == []
     assert Flag.LOW_SCORE in reports[4].flags
+
+
+def test_a_line_that_starts_nowhere_near_an_attack_is_flagged():
+    # The failure nothing else can see: ordinary shape, ordinary score, well
+    # inside a vocal region, and simply a second late.
+    words = (
+        evenly(0, 10.0, 13.0, 6)
+        + evenly(1, 14.0, 17.0, 6)
+        + evenly(2, 18.0, 21.0, 6)
+        + evenly(3, 23.0, 26.0, 6)
+    )
+    onsets = [10.02, 13.98, 18.05, 22.0]
+    reports = analyse(words, group_count=4, onsets=onsets)
+    assert reports[0].flags == []
+    assert Flag.OFF_THE_ATTACK in reports[3].flags
+    assert reports[3].onset_distance == pytest.approx(1.0, abs=0.01)
+
+
+def test_the_distance_is_reported_even_when_it_is_not_flagged():
+    words = evenly(0, 10.0, 13.0, 6) + evenly(1, 14.0, 17.0, 6)
+    reports = analyse(words, group_count=2, onsets=[9.9, 13.9])
+    assert reports[0].onset_distance == pytest.approx(0.1, abs=0.01)
+    assert reports[0].flags == []
+
+
+def test_a_song_whose_lines_all_land_close_is_not_all_flagged():
+    # Three times a tiny median would condemn the lot, so there is a floor.
+    words = [w for i in range(6) for w in evenly(i, 10.0 + i * 4, 13.0 + i * 4, 6)]
+    onsets = [10.0 + i * 4 + (0.02 if i % 2 else -0.02) for i in range(6)]
+    reports = analyse(words, group_count=6, onsets=onsets)
+    assert not any(Flag.OFF_THE_ATTACK in r.flags for r in reports)
+
+
+def test_no_onsets_means_no_opinion():
+    words = evenly(0, 10.0, 13.0, 6) + evenly(1, 40.0, 43.0, 6)
+    reports = analyse(words, group_count=2)
+    assert all(r.onset_distance is None for r in reports)
+    assert not any(Flag.OFF_THE_ATTACK in r.flags for r in reports)
+
+
+def test_pinning_silences_the_attack_flag_too():
+    words = (
+        evenly(0, 10.0, 13.0, 6)
+        + evenly(1, 14.0, 17.0, 6)
+        + evenly(2, 18.0, 21.0, 6)
+        + evenly(3, 23.0, 26.0, 6)
+    )
+    onsets = [10.02, 13.98, 18.05, 22.0]
+    reports = analyse(words, group_count=4, onsets=onsets, adjudicated=[3])
+    assert reports[3].flags == []

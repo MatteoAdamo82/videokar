@@ -136,6 +136,16 @@ All notable changes to this project are documented here. The format follows
   edit all keep working, and the same file is what `videokar render -c` reads.
 - The distance-from-the-edge control goes to 70% of the frame rather than 30%.
 
+- `check` now measures each line's start against the nearest vocal attack, found
+  in the stem, and flags the lines whose distance is an outlier for that song —
+  reporting the distance and its sign, so it says which way to drag the line
+  rather than only that something is odd. This is the failure the other checks
+  cannot see: a line half a second late has an ordinary shape, an ordinary
+  score, and sits inside a vocal region. On the reference track it surfaced four
+  lines everything else called clean. Documents written before this can be
+  checked without being aligned again — the attacks are computed from the audio
+  and cached.
+
 ### Fixed
 
 - Every export overwrote the same filename, so a copy downloaded earlier could

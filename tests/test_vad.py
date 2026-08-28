@@ -72,3 +72,37 @@ def test_region_containment_has_a_tolerance():
     assert region.contains(1.5)
     assert not region.contains(2.4)
     assert region.contains(2.4, tolerance=0.5)
+
+
+def test_onsets_are_found_where_the_voice_comes_in():
+    from videokar.audio.vad import detect_onsets
+
+    signal = np.concatenate([silence(1.0), tone(0.8), silence(1.0), tone(0.8), silence(0.5)])
+    onsets = detect_onsets(signal, SR)
+    assert len(onsets) == 2
+    assert onsets[0] == pytest.approx(1.0, abs=0.12)
+    assert onsets[1] == pytest.approx(2.8, abs=0.12)
+
+
+def test_silence_produces_no_onsets():
+    from videokar.audio.vad import detect_onsets
+
+    assert detect_onsets(silence(3.0, amplitude=1e-6), SR) == []
+
+
+def test_two_attacks_closer_than_the_minimum_gap_count_once():
+    from videokar.audio.vad import detect_onsets
+
+    signal = np.concatenate([silence(0.6), tone(0.04), silence(0.02), tone(0.6), silence(0.4)])
+    assert len(detect_onsets(signal, SR)) == 1
+
+
+def test_the_nearest_onset_is_found_on_either_side():
+    from videokar.audio.vad import nearest_onset
+
+    onsets = [1.0, 5.0, 9.0]
+    assert nearest_onset(4.6, onsets) == 5.0
+    assert nearest_onset(5.4, onsets) == 5.0
+    assert nearest_onset(0.0, onsets) == 1.0
+    assert nearest_onset(100.0, onsets) == 9.0
+    assert nearest_onset(3.0, []) is None
