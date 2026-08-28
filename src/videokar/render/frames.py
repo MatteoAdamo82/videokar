@@ -15,6 +15,7 @@ from PIL import Image, ImageDraw
 from ..config.schema import RGBA, Ball, Style, resolved_ball
 from ..project.model import Line, Song
 from .ball import ball_position
+from .circle import draw_ball
 from .layout import LineLayout, layout_line
 from .sprites import SpriteError, load_sprite
 
@@ -174,14 +175,18 @@ class FrameRenderer:
                 (round(position.x - sprite.width / 2), round(position.y - sprite.height / 2)),
             )
         elif ball.kind == "ball":
-            radius = ball.radius
-            draw.ellipse(
-                (
-                    position.x - radius,
-                    position.y - radius,
-                    position.x + radius,
-                    position.y + radius,
-                ),
-                fill=_fade(ball.colour, alpha),
+            draw_ball(
+                image,
+                position.x,
+                position.y,
+                ball.radius,
+                _fade(ball.colour, alpha),
+                squash=ball.squash,
+                dx=position.dx,
+                dy=position.dy,
+                # The steepest the arc gets, so the stretch is judged against
+                # this hop rather than against an absolute speed that would mean
+                # nothing at another resolution.
+                reference_speed=ball.jump_height * 3.15,
             )
         return image

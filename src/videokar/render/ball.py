@@ -32,6 +32,13 @@ class BallPosition:
     x: float
     y: float
     opacity: float = 1.0
+    dx: float = 0.0
+    dy: float = 0.0
+    """Direction of travel, for squash and stretch. Zero while resting."""
+
+    @property
+    def speed(self) -> float:
+        return math.hypot(self.dx, self.dy)
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,7 +95,11 @@ def _arc(start: Bounce, end: Bounce, progress: float, style: Ball) -> BallPositi
     # Targets can be on different rows; the baseline travels with them.
     base = start.y + (end.y - start.y) * progress
     height = math.sin(progress * math.pi) * style.jump_height
-    return BallPosition(x, base - style.gap_above_text - height)
+    # The arc's own derivative rather than a difference between frames: it is
+    # exact, and it does not depend on knowing the frame rate down here.
+    across = end.centre_x - start.centre_x
+    fall = (end.y - start.y) - style.jump_height * math.pi * math.cos(progress * math.pi)
+    return BallPosition(x, base - style.gap_above_text - height, dx=across, dy=fall)
 
 
 def ball_position(time: float, layout: LineLayout, style: Ball) -> BallPosition | None:

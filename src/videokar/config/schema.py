@@ -173,6 +173,16 @@ class BallStyle:
     gap_above_text: float | None = Field(
         default=None, ge=0.0, le=500.0, description="Empty scales it with the text."
     )
+    squash: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Stretch along the direction of travel and squash across it, the way a "
+            "drawn ball does. 0 is a rigid circle; 0.3 is noticeable without being "
+            "cartoonish. Area is kept, so it does not appear to change size."
+        ),
+    )
     lead_in: float = Field(
         default=1.2, ge=0.0, le=10.0, description="Seconds of run-up before the first word."
     )
@@ -337,6 +347,7 @@ class Ball:
     radius: int
     jump_height: float
     gap_above_text: float
+    squash: float
     min_bounce: float
     lead_in: float
     hide_after: float
@@ -362,6 +373,7 @@ def resolved_ball(ball: BallStyle, size: int) -> Ball:
             if ball.gap_above_text is not None
             else round(size * _BALL_GAP, 1)
         ),
+        squash=ball.squash,
         min_bounce=ball.min_bounce,
         lead_in=ball.lead_in,
         hide_after=ball.hide_after,

@@ -122,7 +122,18 @@ All notable changes to this project are documented here. The format follows
   the file's canvas, and centred on the point the circle would have occupied, so
   swapping one for the other does not move the bounce.
 
+- `[ball] squash` stretches the ball along its direction of travel and squashes
+  it across, area preserved. Off by default, and offered in the export dialog.
+
 ### Fixed
+
+- The ball wobbled as it moved. Pillow's ellipse has no anti-aliasing and rounds
+  its coordinates to whole pixels: the disc measured exactly 33x33 in every
+  frame with only two distinct colours around its edge, while the position it
+  was asked for moved in fractions, so the sliding stair-steps read as the shape
+  breathing. It is supersampled now — around a hundred edge tones — and lands
+  within a tenth of a pixel of where the geometry puts it, rather than six
+  tenths.
 
 - The sync view looked frozen when the server had stopped: a failed preview left
   the previous image on screen and a failed render said nothing that stood out.

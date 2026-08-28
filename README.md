@@ -235,6 +235,17 @@ The settings are a typed schema, not a free-form file: `videokar config show
 what will let the sync view build its own controls from the same definitions
 rather than a hand-written form that drifts out of step.
 
+**The ball is drawn smoothly.** Pillow's ellipse has no anti-aliasing and rounds
+to whole pixels, so the old ball was a hard-edged disc that jumped a pixel at a
+time — measured on the reference track it was exactly 33x33 in every frame while
+the position it was asked for moved in fractions, and at speed the sliding
+stair-steps read as the shape wobbling. It is now supersampled and placed to a
+fraction of a pixel.
+
+If you liked the wobble, `[ball] squash = 0.3` gives you it on purpose: the ball
+stretches along its direction of travel and squashes across it, keeping its area
+so it never appears to change size.
+
 **The ball can be a PNG.** Anything with transparency — a cotton tuft, a paw, a
 logo. It is measured on what is actually drawn rather than on the file's canvas,
 so an export with transparent margins comes out the size you asked for instead

@@ -373,6 +373,7 @@ def create_app(
         paren_scale: float | None = None,
         sprite: str | None = None,
         sprite_scale: float | None = None,
+        squash: float | None = None,
     ) -> Any:
         """One frame, small, so a setting can be judged before a render.
 
@@ -390,8 +391,11 @@ def create_app(
             overrides["layout"]["margin_x"] = margin_x
         if paren_scale is not None:
             overrides["paren"]["scale"] = paren_scale
+        if squash is not None:
+            overrides["ball"] = {"squash": squash}
         if sprite:
             overrides["ball"] = {
+                **overrides.get("ball", {}),
                 "kind": "sprite",
                 "sprite": str(_sprite_path(session, sprite)),
                 **({"sprite_scale": sprite_scale} if sprite_scale is not None else {}),
