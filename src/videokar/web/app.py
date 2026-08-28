@@ -125,6 +125,8 @@ class Session:
         self.workdir = Path(workdir)
         self.history: list[str] = []
         self.jobs = Jobs()
+        self.reserved: set[str] = set()
+        """Output names handed out but not yet written."""
 
     def require(self) -> Path:
         if self.song_path is None:
@@ -428,7 +430,10 @@ def create_app(
         if style.output.format == "png":
             raise HTTPException(422, "a PNG sequence is not something to hand back over HTTP")
         suffix = CODECS[style.output.format].suffix
-        destination = path.with_name(f"{path.stem}{suffix}")
+        destination = library.next_output(
+            session.workdir, path.stem, suffix, session.reserved
+        )
+        session.reserved.add(destination.name)
         found = audio_of(path) if style.output.audio else None
 
         def work(job):

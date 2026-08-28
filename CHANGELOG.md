@@ -138,6 +138,12 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- Every export overwrote the same filename, so a copy downloaded earlier could
+  not be told from the one just made — and since timings get corrected between
+  exports, an old file looks exactly like a new one drifting. Exports are
+  numbered now, and the name is reserved when the job starts rather than when
+  the file appears, so two asked for in quick succession cannot collide.
+
 - A margin larger than the frame pushed the words out of the picture and
   rendered a video with nothing on it. The block is held inside the frame.
 

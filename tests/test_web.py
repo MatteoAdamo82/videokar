@@ -291,7 +291,7 @@ def test_an_output_name_cannot_walk_out_of_the_folder(client):
 
 def test_a_render_job_names_the_file_it_will_produce(client):
     job = client.post("/api/render", json={"preset": "alpha"}).json()
-    assert job["file"] == "song.mov"
+    assert job["file"] == "song-1.mov"
 
 
 def test_a_job_that_fails_reports_why_rather_than_crashing(client, tmp_path):
@@ -575,3 +575,20 @@ def test_the_size_and_font_are_remembered(client, tmp_path):
     style = resolve_style(tmp_path / "videokar.toml")
     assert style.main.size == 96
     assert style.main.font == fonts[0]["path"]
+
+
+def test_each_export_gets_its_own_name(client, tmp_path):
+    first = client.post("/api/render", json={"preset": "alpha"}).json()
+    second = client.post("/api/render", json={"preset": "alpha"}).json()
+    # Overwriting one name made a file downloaded earlier indistinguishable from
+    # the one just made, which looks like the new one drifting.
+    assert first["file"] != second["file"]
+    assert first["file"] == "song-1.mov"
+    assert second["file"] == "song-2.mov"
+
+
+def test_the_numbering_skips_names_already_taken(client, tmp_path):
+    (tmp_path / "song-1.mov").write_bytes(b"an earlier export")
+    job = client.post("/api/render", json={"preset": "alpha"}).json()
+    assert job["file"] == "song-2.mov"
+    assert (tmp_path / "song-1.mov").read_bytes() == b"an earlier export"

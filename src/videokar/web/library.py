@@ -113,3 +113,23 @@ def sprites(directory: Path) -> list[str]:
         for path in directory.glob("*.png")
         if path.is_file() and path.stat().st_size > 0
     )
+
+
+def next_output(directory: Path, stem: str, suffix: str, taken: set[str] | None = None) -> Path:
+    """A name no earlier export has taken.
+
+    Every export used to overwrite one filename, so a copy downloaded earlier
+    was indistinguishable from the one just made — and since the timings get
+    corrected between exports, an old file looks exactly like a new one that has
+    drifted.
+
+    `taken` holds names already handed out this session: the file itself does
+    not exist until the render starts, so two exports asked for in quick
+    succession would otherwise be given the same one.
+    """
+    taken = taken if taken is not None else set()
+    for number in range(1, 10000):
+        candidate = directory / f"{stem}-{number}{suffix}"
+        if not candidate.exists() and candidate.name not in taken:
+            return candidate
+    raise RuntimeError(f"ten thousand exports of {stem}; something is wrong")
