@@ -337,6 +337,45 @@ def create_app(
         job.extra["document"] = str(document)
         return job.as_dict()
 
+    @app.get("/api/fonts")
+    def list_fonts() -> dict[str, Any]:
+        from ..render.fonts import available_fonts  # noqa: PLC0415
+
+        return {"fonts": [font.as_dict() for font in available_fonts(session.workdir)]}
+
+    @app.post("/api/fonts")
+    async def add_font(font: UploadFile = File(...)) -> dict[str, Any]:
+        """Take a font file into the working folder."""
+        from ..render.fonts import FONT_SUFFIXES, describe_font  # noqa: PLC0415
+
+        name = library.safe_name(font.filename or "font.ttf")
+        if Path(name).suffix.lower() not in FONT_SUFFIXES:
+            raise HTTPException(422, "that is not a .ttf, .otf or .ttc")
+        session.workdir.mkdir(parents=True, exist_ok=True)
+        destination = session.workdir / name
+        size = 0
+        with open(destination, "wb") as handle:
+            while chunk := await font.read(1 << 20):
+                size += len(chunk)
+                if size > MAX_UPLOAD:
+                    handle.close()
+                    destination.unlink(missing_ok=True)
+                    raise HTTPException(413, "that file is larger than 200 MB")
+                handle.write(chunk)
+
+        described = describe_font(destination)
+        if described is None:
+            destination.unlink(missing_ok=True)
+            raise HTTPException(422, f"{name} is not a font Pillow can draw with")
+
+        from ..render.fonts import _scan  # noqa: PLC0415
+
+        _scan.cache_clear()
+        return {
+            "font": described.as_dict(),
+            "fonts": [f.as_dict() for f in available_fonts_for(session)],
+        }
+
     @app.post("/api/sprites")
     async def add_sprite(image: UploadFile = File(...)) -> dict[str, Any]:
         """Take a PNG to bounce instead of the circle."""
@@ -428,6 +467,8 @@ def create_app(
         sprite: str | None = None,
         sprite_scale: float | None = None,
         squash: float | None = None,
+        font: str | None = None,
+        font_size: int | None = None,
     ) -> Any:
         """One frame, small, so a setting can be judged before a render.
 
@@ -445,6 +486,11 @@ def create_app(
             overrides["layout"]["margin_x"] = margin_x
         if paren_scale is not None:
             overrides["paren"]["scale"] = paren_scale
+        if font or font_size is not None:
+            overrides["main"] = {
+                **({"font": _font_path(session, font)} if font else {}),
+                **({"size": font_size} if font_size is not None else {}),
+            }
         if squash is not None:
             overrides["ball"] = {"squash": squash}
         if sprite:
@@ -520,9 +566,33 @@ def _sprite_path(session: Session, name: str) -> Path:
     return path
 
 
+def available_fonts_for(session: Session):
+    from ..render.fonts import available_fonts  # noqa: PLC0415
+
+    return available_fonts(session.workdir)
+
+
+def _font_path(session: Session, name: str) -> str:
+    """A font by path, checked to be one this machine actually offers.
+
+    Checked rather than trusted: the page sends a path, and a path from a page
+    is not a reason to read an arbitrary file off the disk.
+    """
+    from fastapi import HTTPException  # noqa: PLC0415
+
+    if any(font.path == name for font in available_fonts_for(session)):
+        return name
+    raise HTTPException(404, f"{Path(name).name} is not a font this machine offers")
+
+
 def _style_for(request: RenderRequest, session: Session | None = None):
     """The style a render request asks for, presets and overrides resolved."""
     overrides: dict[str, Any] = dict(request.overrides or {})
+    main = dict(overrides.get("main") or {})
+    if session is not None and main.get("font"):
+        main["font"] = _font_path(session, main["font"])
+        overrides["main"] = main
+
     ball = dict(overrides.get("ball") or {})
     if session is not None and ball.get("sprite"):
         # The page sends a bare filename; it only ever names something in the

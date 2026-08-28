@@ -122,6 +122,13 @@ holds at any resolution, and it goes up to 70% — past the middle, if that is
 where the words belong. A margin larger than the frame is held inside it rather
 than pushing the words out of the picture.
 
+**Type and size are in the dialog too.** It lists every font this machine can
+draw with — scanned rather than guessed, about 365 of them here, with Apple's
+internal fallback faces left out — and takes a `.ttf`, `.otf` or `.ttc` dropped
+in. Size is a multiple of what the preset already looks right at, so it survives
+changing resolution. A font in the working folder wins over the system's copy of
+the same family, since that is the one you put there on purpose.
+
 **The dialog remembers.** Rendering writes the choices to `videokar.toml` in the
 working folder and the dialog restores them next time — from the folder, not
 from the browser, so it survives a reload, another machine, and being edited by

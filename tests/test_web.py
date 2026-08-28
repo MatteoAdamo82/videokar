@@ -515,3 +515,63 @@ def test_settings_the_schema_refuses_are_not_written(client, tmp_path):
     )
     assert response.status_code == 422
     assert not (tmp_path / "videokar.toml").exists()
+
+
+def test_the_fonts_this_machine_offers_are_listed(client):
+    fonts = client.get("/api/fonts").json()["fonts"]
+    assert fonts
+    assert all("path" in font and "label" in font for font in fonts)
+
+
+def test_a_font_can_be_used_in_the_preview(client):
+    fonts = client.get("/api/fonts").json()["fonts"]
+    plain = client.get("/api/frame", params={"at": 20.5}).content
+    styled = client.get("/api/frame", params={"at": 20.5, "font": fonts[0]["path"]}).content
+    assert plain != styled
+
+
+def test_a_font_this_machine_does_not_offer_is_refused(client):
+    # A path from a page is not a reason to read an arbitrary file off the disk.
+    response = client.get("/api/frame", params={"at": 20.5, "font": "/etc/passwd"})
+    assert response.status_code == 404
+    assert "not a font this machine offers" in response.json()["detail"]
+
+
+def test_a_render_with_an_unoffered_font_is_refused(client):
+    response = client.post(
+        "/api/render", json={"overrides": {"main": {"font": "/etc/passwd"}}}
+    )
+    assert response.status_code == 404
+
+
+def test_the_main_text_size_reaches_the_preview(client):
+    small = client.get("/api/frame", params={"at": 20.5, "font_size": 40}).content
+    large = client.get("/api/frame", params={"at": 20.5, "font_size": 120}).content
+    assert small != large
+
+
+def test_uploading_something_that_is_not_a_font_is_refused(client, tmp_path):
+    response = client.post(
+        "/api/fonts", files={"font": ("notes.ttf", b"not a font", "font/ttf")}
+    )
+    assert response.status_code == 422
+    assert not (tmp_path / "notes.ttf").exists()
+
+
+def test_uploading_a_file_with_the_wrong_suffix_is_refused(client):
+    response = client.post("/api/fonts", files={"font": ("thing.doc", b"x", "text/plain")})
+    assert response.status_code == 422
+    assert ".ttf" in response.json()["detail"]
+
+
+def test_the_size_and_font_are_remembered(client, tmp_path):
+    fonts = client.get("/api/fonts").json()["fonts"]
+    client.post(
+        "/api/style",
+        json={"preset": "alpha", "overrides": {"main": {"size": 96, "font": fonts[0]["path"]}}},
+    )
+    from videokar.config import resolve_style
+
+    style = resolve_style(tmp_path / "videokar.toml")
+    assert style.main.size == 96
+    assert style.main.font == fonts[0]["path"]

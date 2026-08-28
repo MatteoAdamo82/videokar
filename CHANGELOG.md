@@ -125,6 +125,11 @@ All notable changes to this project are documented here. The format follows
 - `[ball] squash` stretches the ball along its direction of travel and squashes
   it across, area preserved. Off by default, and offered in the export dialog.
 
+- The main text's font and size are in the export dialog. Fonts are scanned from
+  the usual places on this machine and from the working folder, listed by family
+  and style, with a file upload for one that is not installed. Size is offered
+  as a multiple of what the preset already looks right at rather than as a pixel
+  count, so it survives a change of resolution.
 - The export dialog remembers. Rendering writes the choices to `videokar.toml`
   in the working folder and the dialog restores them next time — kept beside the
   song rather than in the browser, so a reload, a different machine or a hand

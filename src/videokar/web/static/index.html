@@ -596,9 +596,10 @@ $("#library").onclick = async () => {
 };
 
 $("#export").onclick = async () => {
-  let data, saved;
+  let data, saved, fonts;
   try {
     data = await api("/api/library");
+    fonts = (await api("/api/fonts")).fonts;
     // Restored from the folder rather than from this tab, so it survives a
     // reload, another browser, and the CLI reading the same file.
     saved = await api("/api/style");
@@ -609,6 +610,7 @@ $("#export").onclick = async () => {
     ball: saved.overrides.ball || {},
     paren: saved.overrides.paren || {},
     output: saved.overrides.output || {},
+    main: saved.overrides.main || {},
   };
   const marginPct = was.layout.margin_y != null
     ? Math.round(was.layout.margin_y * 100 / presetHeight(was.preset))
@@ -629,6 +631,15 @@ $("#export").onclick = async () => {
         <option value="">from the preset</option>
         ${[23.976, 24, 25, 29.97, 30, 50, 59.94, 60].map((f) =>
           `<option value="${f}" ${was.output.fps === f ? "selected" : ""}>${f}</option>`).join("")}
+      </select></label>
+      <label>main text — <b id="expsizeout">1.0×</b> the default
+        <input type="range" id="expsize" min="50" max="250"
+               value="${Math.round((was.main.size ? was.main.size / defaultSize(was.preset) : 1) * 100)}">
+      </label>
+      <label>font<select id="expfont">
+        <option value="">the system sans</option>
+        ${fonts.map((f) =>
+          `<option value="${esc(f.path)}" ${was.main.font === f.path ? "selected" : ""}>${esc(f.label)}</option>`).join("")}
       </select></label>
       <label>the words sit<select id="expanchor">
         ${[["bottom", "near the bottom"], ["center", "in the middle"],
@@ -653,9 +664,14 @@ $("#export").onclick = async () => {
         <input type="range" id="expsquash" min="0" max="80" value="${Math.round((was.ball.squash ?? 0) * 100)}">
       </label>
     </div>
-    <label>…or add a PNG with transparency
-      <input type="file" id="newsprite" accept="image/png">
-    </label>
+    <div class="grid">
+      <label>…or add a font file
+        <input type="file" id="newfont" accept=".ttf,.otf,.ttc">
+      </label>
+      <label>…or add a PNG with transparency
+        <input type="file" id="newsprite" accept="image/png">
+      </label>
+    </div>
     <label style="display:flex;gap:8px;align-items:center;margin-top:14px">
       <input type="checkbox" id="expaudio" ${was.output.audio === false ? "" : "checked"} style="width:auto">
       carry the song in the file — it lines itself up in an editor, and cannot drift from it
@@ -678,6 +694,8 @@ $("#export").onclick = async () => {
     sprite: $("#expsprite").value,
     sprite_scale: Number($("#expspritescale").value) / 100,
     squash: Number($("#expsquash").value) / 100,
+    font: $("#expfont").value,
+    size_scale: Number($("#expsize").value) / 100,
   });
 
   let previewTimer = null;
@@ -691,6 +709,7 @@ $("#export").onclick = async () => {
     $("#expparenout").textContent = `${s.paren_scale.toFixed(2)}×`;
     $("#expspriteout").textContent = `${s.sprite_scale.toFixed(1)}×`;
     $("#expsquashout").textContent = s.squash ? s.squash.toFixed(2) : "off";
+    $("#expsizeout").textContent = `${s.size_scale.toFixed(2)}×`;
   };
 
   const drawPreview = () => {
@@ -708,16 +727,37 @@ $("#export").onclick = async () => {
       query.set("sprite_scale", s.sprite_scale);
     }
     if (s.squash) query.set("squash", s.squash);
+    if (s.font) query.set("font", s.font);
+    query.set("font_size", Math.round(defaultSize(s.preset) * s.size_scale));
     const image = $("#preview");
     image.onerror = () =>
       say("the preview could not be drawn — check the status line above", "bad");
     image.src = "/api/frame?" + query;
   };
   for (const id of ["expreset", "expanchor", "expmargin", "expparen", "expsprite",
-                    "expspritescale", "expsquash"]) {
+                    "expspritescale", "expsquash", "expsize", "expfont"]) {
     $("#" + id).oninput = refresh;
   }
   refresh();
+
+  $("#newfont").onchange = async () => {
+    const file = $("#newfont").files[0];
+    if (!file) return;
+    const body = new FormData();
+    body.append("font", file);
+    try {
+      const result = await api("/api/fonts", {method: "POST", body});
+      const picker = $("#expfont");
+      picker.innerHTML = `<option value="">the system sans</option>` +
+        result.fonts.map((f) =>
+          `<option value="${esc(f.path)}">${esc(f.label)}</option>`).join("");
+      picker.value = result.font.path;
+      refresh();
+      say(`${result.font.label} added`, "good");
+    } catch (err) {
+      report(err);
+    }
+  };
 
   $("#newsprite").onchange = async () => {
     const file = $("#newsprite").files[0];
@@ -750,6 +790,10 @@ $("#export").onclick = async () => {
     layout: {
       anchor: s.anchor,
       margin_y: Math.round(presetHeight(s.preset) * s.margin_pct / 100),
+    },
+    main: {
+      size: Math.round(defaultSize(s.preset) * s.size_scale),
+      ...(s.font ? {font: s.font} : {}),
     },
     paren: {scale: s.paren_scale},
     ball: {
@@ -793,6 +837,9 @@ $("#export").onclick = async () => {
 // turned into the pixels the schema wants.
 const PRESET_HEIGHT = {alpha: 1080, youtube: 1080, minimal: 1080, shorts: 1920};
 const presetHeight = (name) => PRESET_HEIGHT[name] || 1080;
+// The size the renderer would pick on its own, so the control is a multiple of
+// what a preset already looks right at rather than a bare pixel count.
+const defaultSize = (name) => Math.max(12, Math.round(presetHeight(name) / 17));
 
 function previewTime() {
   // The line under the playhead, or the next one along: previewing a frame with
