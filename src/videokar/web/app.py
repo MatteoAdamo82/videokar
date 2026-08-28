@@ -165,7 +165,7 @@ def create_app(
     def get_song() -> dict[str, Any]:
         return _payload(load_song(current()), current())
 
-    @app.get("/api/library")
+    @app.api_route("/api/library", methods=["GET", "HEAD"])
     def get_library() -> dict[str, Any]:
         return {
             "workdir": str(session.workdir),

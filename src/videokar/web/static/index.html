@@ -115,6 +115,10 @@
   .job.done { border-color: var(--pin); }
   a.dl { color: #9fb4ff; }
 
+  /* A dead server is the one failure that makes everything look frozen, so it
+     gets a band across the top rather than a line in the status bar. */
+  body.offline header { box-shadow: inset 0 3px 0 var(--bad); }
+  body.offline #status { color: var(--bad); font-weight: 600; }
   #hint { position: fixed; bottom: 10px; left: 282px; right: 14px; color: var(--dim);
           font-size: 11px; pointer-events: none; text-shadow: 0 0 6px var(--bg); }
 </style>
@@ -179,14 +183,29 @@ function loopBounds() {
 const fmt = (t) => `${Math.floor(t/60)}:${String(Math.floor(t%60)).padStart(2,"0")}.${String(Math.floor(t%1*100)).padStart(2,"0")}`;
 const say = (msg, kind="") => { const s = $("#status"); s.textContent = msg; s.className = kind; };
 
+class Offline extends Error {}
+
 async function api(path, options) {
-  const response = await fetch(path, options);
+  let response;
+  try {
+    response = await fetch(path, options);
+  } catch (err) {
+    // fetch only rejects when the request never got an answer. Told apart from
+    // an HTTP error because the page looks frozen either way, and the two need
+    // completely different things from the reader.
+    throw new Offline("the server is not answering — is `videokar serve` still running?");
+  }
   if (!response.ok) {
     let detail = response.statusText;
     try { detail = (await response.json()).detail || detail; } catch {}
     throw new Error(detail);
   }
   return response.json();
+}
+
+function report(err) {
+  say(err.message, "bad");
+  document.body.classList.toggle("offline", err instanceof Offline);
 }
 
 async function load() {
@@ -359,7 +378,7 @@ async function edit(body) {
   } catch (err) {
     // A refused drag is information, not a failure: the timeline would have
     // inverted, and the server says which line it collided with.
-    say(err.message, "bad");
+    report(err);
     render();
   }
 }
@@ -500,7 +519,7 @@ const mmss = (s) => {
 
 $("#library").onclick = async () => {
   let data;
-  try { data = await api("/api/library"); } catch (err) { return say(err.message, "bad"); }
+  try { data = await api("/api/library"); } catch (err) { return report(err); }
   openSheet(`
     <h1>Songs</h1>
     <p>${esc(data.workdir)}</p>
@@ -563,7 +582,7 @@ $("#library").onclick = async () => {
         }
       });
     } catch (err) {
-      say(err.message, "bad");
+      report(err);
     } finally {
       $("#startalign").disabled = false;
     }
@@ -572,7 +591,7 @@ $("#library").onclick = async () => {
 
 $("#export").onclick = async () => {
   let data;
-  try { data = await api("/api/library"); } catch (err) { return say(err.message, "bad"); }
+  try { data = await api("/api/library"); } catch (err) { return report(err); }
   openSheet(`
     <h1>Export</h1>
     <p>Rendered next to the document, then offered as a download.</p>
@@ -637,11 +656,20 @@ $("#export").onclick = async () => {
     sprite_scale: Number($("#expspritescale").value) / 100,
   });
 
+  let previewTimer = null;
   const refresh = () => {
+    // Dragging a slider fires an event per pixel; without this the page asks
+    // for forty frames on the way to the one you wanted.
+    clearTimeout(previewTimer);
+    previewTimer = setTimeout(drawPreview, 120);
     const s = settings();
     $("#expmarginout").textContent = `${s.margin_pct}%`;
     $("#expparenout").textContent = `${s.paren_scale.toFixed(2)}×`;
     $("#expspriteout").textContent = `${s.sprite_scale.toFixed(1)}×`;
+  };
+
+  const drawPreview = () => {
+    const s = settings();
     const height = presetHeight(s.preset);
     const query = new URLSearchParams({
       at: previewTime().toFixed(2),
@@ -654,7 +682,10 @@ $("#export").onclick = async () => {
       query.set("sprite", s.sprite);
       query.set("sprite_scale", s.sprite_scale);
     }
-    $("#preview").src = "/api/frame?" + query;
+    const image = $("#preview");
+    image.onerror = () =>
+      say("the preview could not be drawn — check the status line above", "bad");
+    image.src = "/api/frame?" + query;
   };
   for (const id of ["expreset", "expanchor", "expmargin", "expparen", "expsprite",
                     "expspritescale"]) {
@@ -710,7 +741,7 @@ $("#export").onclick = async () => {
       });
       watchJob(job);
     } catch (err) {
-      say(err.message, "bad");
+      report(err);
     } finally {
       $("#startrender").disabled = false;
     }
@@ -775,7 +806,7 @@ async function saveOutput(name) {
       throw new Error(detail);
     }
   } catch (err) {
-    say(err.message, "bad");
+    report(err);
     return;
   }
   const link = document.createElement("a");
@@ -907,5 +938,17 @@ function tick() {
 }
 
 audio.onplay = () => { follow = true; $("#play").textContent = "❚❚ Pause"; };
-load().then(tick).catch((err) => say(err.message, "bad"));
+// One quiet poll: a server that dies while the page is open otherwise leaves it
+// looking frozen until something is clicked.
+setInterval(async () => {
+  try {
+    await fetch("/api/library", {method: "HEAD"});
+    document.body.classList.remove("offline");
+  } catch {
+    document.body.classList.add("offline");
+    say("the server is not answering — is `videokar serve` still running?", "bad");
+  }
+}, 5000);
+
+load().then(tick).catch(report);
 </script>

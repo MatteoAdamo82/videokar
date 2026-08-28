@@ -134,7 +134,9 @@ written. The file on disk is rewritten after each accepted edit — there is no
 save button and nothing to lose — and ⌘Z steps back through the last fifty.
 
 It reads and writes a file on your machine and has no authentication, so it
-binds to localhost and should stay there.
+binds to localhost and should stay there. If the page shows a red band and says
+the server is not answering, `videokar serve` has stopped — nothing is lost, the
+document on disk is always current.
 
 ## Fixing a drifting block
 

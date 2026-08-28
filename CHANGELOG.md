@@ -124,6 +124,16 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- The sync view looked frozen when the server had stopped: a failed preview left
+  the previous image on screen and a failed render said nothing that stood out.
+  A request that never gets an answer is now told apart from one that comes back
+  refused, since the two need different things from the reader, and a stopped
+  server puts a band across the header and a message naming the command to
+  restart. The page also polls quietly, so it notices without being clicked.
+- The preview asked for a frame on every event a slider fired — forty-odd on the
+  way to one value. It is debounced: twenty-one drag events now make one
+  request.
+
 - `kind = "sprite"` was in the schema from the start and drew nothing at all.
 
 - Fractional frame rates were impossible: `fps` was an integer, so 23.976 and

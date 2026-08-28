@@ -446,3 +446,9 @@ def test_a_render_with_a_sprite_outside_the_folder_is_refused(client):
         json={"overrides": {"ball": {"sprite": "/etc/passwd"}}},
     )
     assert response.status_code in (403, 404)
+
+
+def test_head_on_the_library_is_answered(client):
+    # The page polls this to notice a server that has gone away; a 405 with a
+    # JSON body would answer, which would make a dead server look alive.
+    assert client.head("/api/library").status_code == 200
