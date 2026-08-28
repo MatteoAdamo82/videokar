@@ -127,6 +127,15 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- The sync view sent no cache headers at all, so a browser was free to cache it
+  heuristically and keep running an older page against an updated server — which
+  looks like the app freezing rather than like a stale cache. Everything live is
+  now `no-store`; finished renders and audio stay cacheable. The page also stamps
+  the version it is running into the header, so the question has an answer.
+- The per-frame loop rebuilt the whole word list once per word — forty thousand
+  comparisons and two hundred array allocations every frame. It builds an index
+  when the document changes instead: 1.8ms per frame down to 0.05ms.
+
 - The ball wobbled as it moved. Pillow's ellipse has no anti-aliasing and rounds
   its coordinates to whole pixels: the disc measured exactly 33x33 in every
   frame with only two distinct colours around its edge, while the position it

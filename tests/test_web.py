@@ -452,3 +452,23 @@ def test_head_on_the_library_is_answered(client):
     # The page polls this to notice a server that has gone away; a 405 with a
     # JSON body would answer, which would make a dead server look alive.
     assert client.head("/api/library").status_code == 200
+
+
+def test_nothing_live_is_cacheable(client):
+    # With no headers at all a browser caches heuristically, and a tab running
+    # last week's page looks like the app freezing rather than like a cache.
+    for path in ("/", "/api/song", "/api/library"):
+        assert client.get(path).headers.get("cache-control") == "no-store", path
+
+
+def test_a_finished_file_may_be_cached(client, tmp_path):
+    (tmp_path / "song.mov").write_bytes(b"not really a movie")
+    assert "no-store" not in client.get("/api/output/song.mov").headers.get("cache-control", "")
+
+
+def test_the_page_says_which_version_it_is(client):
+    from videokar import __version__
+
+    body = client.get("/").text
+    assert "{{version}}" not in body
+    assert __version__ in body

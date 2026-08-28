@@ -23,6 +23,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from PIL import Image
 from pydantic import BaseModel
 
+from .. import __version__
 from ..audio.peaks import peaks_for
 from ..config import ConfigError, available_presets, resolve_style
 from ..project import check_song, load_song, save_song
@@ -144,6 +145,20 @@ def create_app(
     session = Session(song_path, base)
     app = FastAPI(title="videokar", docs_url=None, redoc_url=None)
 
+    @app.middleware("http")
+    async def no_stale_answers(request, call_next):
+        """Nothing here is worth caching, and a cached page is a trap.
+
+        With no headers at all a browser caches heuristically, so an updated
+        videokar serves its new page to a tab that keeps running the old one —
+        which looks like the app freezing rather than like a stale cache. Every
+        answer is live state; only the finished files are worth keeping.
+        """
+        response = await call_next(request)
+        if not request.url.path.startswith(("/api/output/", "/api/audio", "/api/sprites/")):
+            response.headers["Cache-Control"] = "no-store"
+        return response
+
     def current() -> Path:
         try:
             return session.require()
@@ -159,7 +174,10 @@ def create_app(
 
     @app.get("/", response_class=HTMLResponse)
     def index() -> str:
-        return (STATIC / "index.html").read_text(encoding="utf-8")
+        # The version is stamped in so "are you running the current page?" has
+        # an answer that does not involve guessing about the cache.
+        page = (STATIC / "index.html").read_text(encoding="utf-8")
+        return page.replace("{{version}}", __version__)
 
     @app.get("/api/song")
     def get_song() -> dict[str, Any]:

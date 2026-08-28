@@ -23,6 +23,7 @@
            border-radius: 6px; padding: 4px 6px; font: inherit; }
   .grow { flex: 1; }
   #status { color: var(--dim); }
+  #version { color: #55506a; font-variant-numeric: tabular-nums; }
   #status.bad { color: var(--bad); }
   #status.good { color: var(--pin); }
 
@@ -141,6 +142,7 @@
   <button id="undo" disabled>↶ Undo</button>
   <button id="export">⤓ Export</button>
   <span class="grow"></span>
+  <span id="version" title="the page this tab is running">{{version}}</span>
   <span id="status">loading…</span>
 </header>
 
@@ -168,6 +170,9 @@ const audio = $("#audio"), scroll = $("#scroll"), track = $("#track"),
 
 let state = null, peaks = null, pps = 110, duration = 0, selected = null, follow = true;
 let undoDepth = 0, loopOn = false;
+// Word id -> word, rebuilt when the document changes rather than looked up by
+// scanning every word for every word on every frame.
+let wordIndex = new Map();
 
 // Enough run-up to hear the beat the first word lands on, and enough tail not to
 // clip the last one before it comes round again.
@@ -327,6 +332,7 @@ function render() {
     }
     linesEl.append(block);
   }
+  wordIndex = new Map(lines().flatMap((line) => line.words.map((w) => [w.id, w])));
   drawLoop();
 }
 
@@ -934,8 +940,8 @@ function tick() {
   head.style.left = t * pps + "px";
   $("#clock").textContent = `${fmt(t)} / ${fmt(duration)}`;
   for (const el of document.querySelectorAll(".word")) {
-    const word = lines().flatMap((l) => l.words).find((w) => w.id === el.dataset.word);
-    el.classList.toggle("sung", word && word.start != null && t >= word.start);
+    const word = wordIndex.get(el.dataset.word);
+    el.classList.toggle("sung", Boolean(word && word.start != null && t >= word.start));
   }
   if (follow && !audio.paused) {
     const x = t * pps;
