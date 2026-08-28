@@ -112,6 +112,10 @@ All notable changes to this project are documented here. The format follows
   fixed handful, so the page can offer a control without the server learning its
   name.
 
+- `videokar sprite FILE` inspects a candidate image before it is used: canvas,
+  visible size, whether it has transparency, and the pixels it will be drawn at
+  for a given output. Uploading one through the sync view reports the same
+  warnings.
 - The bouncing thing can be a PNG with transparency, from `--sprite`, the config
   file, or the export dialog in the sync view, which lists the PNGs in the
   working folder and accepts new ones. Sized on the visible pixels rather than

@@ -245,6 +245,16 @@ videokar render song.json --sprite paw.png --sprite-scale 2
 `assets/sprites/cotton.png` is there to try it with. In the sync view, the
 export dialog lists the PNGs in the folder and takes new ones.
 
+```bash
+videokar sprite paw.png --scale 3
+```
+
+says what it is and how it will come out — canvas, the part actually drawn, the
+pixel size at your output, and whether it has an alpha channel at all. Size is
+rarely the problem: it is scaled down, and 32 pixels is a default ball at 1080p.
+A flattened export with no transparency is the problem, and looks like a solid
+rectangle bouncing over the words.
+
 **The ball bounces on beats, not on words.** Sung words run together — on the
 reference track 41% of the gaps between words are under a third of a second and
 the quickest, "I" to "know", is 20ms, half a frame at 25fps. A full arc in that

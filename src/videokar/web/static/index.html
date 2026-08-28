@@ -675,7 +675,11 @@ $("#export").onclick = async () => {
       picker.value = result.name;
       data.sprites = result.sprites;
       refresh();
-      say(`${result.name} added`, "good");
+      // Kept either way — a solid badge is a legitimate thing to bounce — but
+      // a lost alpha channel is worth hearing about before the render.
+      const notes = result.warnings || [];
+      say(notes.length ? `${result.name}: ${notes[0]}` : `${result.name} added`,
+          notes.length ? "bad" : "good");
     } catch (err) {
       say(err.message, "bad");
     }

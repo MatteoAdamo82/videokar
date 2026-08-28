@@ -301,14 +301,20 @@ def create_app(
                     raise HTTPException(413, "that file is larger than 200 MB")
                 handle.write(chunk)
 
-        from ..render.sprites import SpriteError, load_sprite  # noqa: PLC0415
+        from ..render.sprites import SpriteError, inspect_sprite  # noqa: PLC0415
 
         try:
-            load_sprite(str(destination), 32)
+            report = inspect_sprite(destination)
         except SpriteError as exc:
             destination.unlink(missing_ok=True)
             raise HTTPException(422, str(exc)) from exc
-        return {"name": name, "sprites": library.sprites(session.workdir)}
+        return {
+            "name": name,
+            "sprites": library.sprites(session.workdir),
+            # Kept rather than refused: a solid badge is a legitimate thing to
+            # bounce. But it is nearly always an export that lost its alpha.
+            "warnings": report.warnings,
+        }
 
     @app.get("/api/sprites/{name}")
     def get_sprite(name: str) -> Any:

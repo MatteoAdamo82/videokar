@@ -14,6 +14,7 @@ something anyone should have to crop out by hand.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
@@ -49,12 +50,57 @@ def load_sprite(path: str, height: int) -> Image.Image:
     return image.resize((width, max(1, height)), Image.LANCZOS)
 
 
-def sprite_has_alpha(path: str) -> bool:
-    """True when the file carries transparency worth having."""
+@dataclass(frozen=True, slots=True)
+class SpriteReport:
+    """What a candidate image is, and how it will come out."""
+
+    canvas: tuple[int, int]
+    visible: tuple[int, int]
+    """Size of the part that is actually drawn, after transparent margins."""
+
+    transparent: bool
+    padding: float
+    """Fraction of the canvas that is empty margin."""
+
+    @property
+    def warnings(self) -> list[str]:
+        notes = []
+        if not self.transparent:
+            notes.append(
+                "no transparency — this will bounce as a solid rectangle over the words. "
+                "Export it as a PNG with an alpha channel."
+            )
+        if self.padding > 0.5:
+            notes.append(
+                f"{self.padding:.0%} of the file is empty margin. Harmless — it is measured "
+                "on what it draws — but the file is mostly nothing."
+            )
+        return notes
+
+    def drawn_at(self, diameter: int) -> tuple[int, int]:
+        width = max(1, round(self.visible[0] * diameter / self.visible[1]))
+        return (width, diameter)
+
+
+def inspect_sprite(path: str | Path) -> SpriteReport:
+    """Measure an image before it is used, so surprises come early."""
     file = Path(path).expanduser()
     if not file.exists():
-        return False
-    with Image.open(file) as image:
-        return "A" in image.convert("RGBA").getbands() and (
-            image.convert("RGBA").getchannel("A").getextrema()[0] < 255
-        )
+        raise SpriteError(f"sprite not found: {file}")
+    try:
+        with Image.open(file) as opened:
+            image = opened.convert("RGBA")
+    except OSError as exc:
+        raise SpriteError(f"{file} is not an image Pillow can read: {exc}") from exc
+
+    box = image.getbbox()
+    if box is None:
+        raise SpriteError(f"{file} is entirely transparent — nothing would be drawn")
+    visible = (box[2] - box[0], box[3] - box[1])
+    area = image.width * image.height
+    return SpriteReport(
+        canvas=image.size,
+        visible=visible,
+        transparent=image.getchannel("A").getextrema()[0] < 255,
+        padding=1 - (visible[0] * visible[1]) / area if area else 0.0,
+    )

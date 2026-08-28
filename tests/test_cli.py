@@ -222,3 +222,44 @@ def test_config_show_reports_a_bad_value(tmp_path):
     result = runner.invoke(app, ["config", "show", "-c", str(path)])
     assert result.exit_code == 1
     assert "layout.anchor" in result.stderr
+
+
+def _png(path, size=(400, 400), colour=(255, 0, 0, 255), margin=100):
+    from PIL import Image
+
+    image = Image.new("RGBA", size, (0, 0, 0, 0))
+    for x in range(margin, size[0] - margin):
+        for y in range(margin, size[1] - margin):
+            image.putpixel((x, y), colour)
+    image.save(path)
+    return path
+
+
+def test_sprite_reports_size_and_transparency(tmp_path):
+    result = runner.invoke(app, ["sprite", str(_png(tmp_path / "blob.png"))])
+    assert result.exit_code == 0
+    assert "400x400" in result.stdout
+    assert "200x200" in result.stdout
+
+
+def test_sprite_warns_when_there_is_no_transparency(tmp_path):
+    from PIL import Image
+
+    path = tmp_path / "flat.png"
+    Image.new("RGBA", (300, 300), (255, 255, 255, 255)).save(path)
+    result = runner.invoke(app, ["sprite", str(path)])
+    assert "solid rectangle" in result.stdout
+
+
+def test_sprite_says_when_an_image_is_too_small(tmp_path):
+    result = runner.invoke(
+        app,
+        ["sprite", str(_png(tmp_path / "tiny.png", size=(20, 20), margin=2)), "--scale", "4"],
+    )
+    assert "too small" in result.stdout
+
+
+def test_sprite_on_a_missing_file_says_so(tmp_path):
+    result = runner.invoke(app, ["sprite", str(tmp_path / "nope.png")])
+    assert result.exit_code == 1
+    assert "not found" in result.stderr

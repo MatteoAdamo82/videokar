@@ -103,3 +103,35 @@ def test_the_sprite_lands_where_the_circle_would_have(sprite):
     b = ball_position(at, blob.cues[0].layout, blob.cues[0].ball)
     # Swapping one for the other must not move the bounce.
     assert (a.x, a.y) == (b.x, b.y)
+
+
+def test_inspecting_reports_the_visible_size_not_the_canvas(sprite):
+    from videokar.render.sprites import inspect_sprite
+
+    report = inspect_sprite(sprite)
+    assert report.canvas == (200, 200)
+    assert report.visible == (120, 60)
+    assert report.transparent
+
+
+def test_a_flat_export_is_reported_as_having_no_transparency(tmp_path):
+    from videokar.render.sprites import inspect_sprite
+
+    path = tmp_path / "flat.png"
+    Image.new("RGBA", (64, 64), (255, 255, 255, 255)).save(path)
+    report = inspect_sprite(path)
+    assert not report.transparent
+    assert any("solid rectangle" in note for note in report.warnings)
+
+
+def test_mostly_margin_is_reported(sprite):
+    from videokar.render.sprites import inspect_sprite
+
+    # 120x60 drawn inside 200x200 is 82% empty.
+    assert any("empty margin" in note for note in inspect_sprite(sprite).warnings)
+
+
+def test_the_drawn_size_keeps_the_aspect_of_what_is_visible(sprite):
+    from videokar.render.sprites import inspect_sprite
+
+    assert inspect_sprite(sprite).drawn_at(30) == (60, 30)
