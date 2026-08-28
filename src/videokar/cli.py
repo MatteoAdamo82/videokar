@@ -287,7 +287,10 @@ def render_cmd(
     ] = None,
     width: Annotated[int | None, typer.Option("--width")] = None,
     height: Annotated[int | None, typer.Option("--height")] = None,
-    fps: Annotated[int | None, typer.Option("--fps")] = None,
+    fps: Annotated[
+        float | None,
+        typer.Option("--fps", help="Match your editing timeline. 23.976 and 29.97 work."),
+    ] = None,
     font: Annotated[Path | None, typer.Option("--font", help="Font file.")] = None,
     font_size: Annotated[
         int | None, typer.Option("--font-size", help="Pixels. Default follows --height.")
@@ -364,13 +367,14 @@ def render_cmd(
 
     suffix = CODECS[output.format].suffix
     destination = output_path or song_path.with_suffix(suffix or "")
-    total_frames = int(round(song.audio.duration * output.fps))
+    total_frames = output.frame_count(song.audio.duration)
 
     try:
         if output.format == "png":
             with console.status(f"rendering {total_frames} frames…", spinner="dots"):
                 render_png_sequence(
-                    (renderer.frame(i / output.fps) for i in range(total_frames)), destination
+                    (renderer.frame(output.frame_time(i)) for i in range(total_frames)),
+                    destination,
                 )
         else:
             with console.status(f"rendering {total_frames} frames…", spinner="dots") as status:

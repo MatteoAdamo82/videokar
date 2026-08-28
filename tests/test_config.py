@@ -77,7 +77,32 @@ def test_a_bad_value_names_the_field_and_why(tmp_path):
     with pytest.raises(ConfigError) as caught:
         resolve_style(path)
     assert "output.fps" in str(caught.value)
-    assert "greater than or equal to 1" in str(caught.value)
+    assert "greater than 0" in str(caught.value)
+
+
+@pytest.mark.parametrize(
+    ("written", "numerator", "denominator"),
+    [(23.976, 24000, 1001), (29.97, 30000, 1001), (59.94, 60000, 1001), (25, 25, 1)],
+)
+def test_ntsc_frame_rates_are_kept_exact(tmp_path, written, numerator, denominator):
+    # 23.976 is 24000/1001. Encoding at the decimal puts the drift back, small.
+    path = write(tmp_path, f"[output]\nfps = {written}\n")
+    rate = resolve_style(path).output.rate
+    assert (rate.numerator, rate.denominator) == (numerator, denominator)
+
+
+def test_frame_times_come_from_the_exact_rate(tmp_path):
+    from videokar.config import Output
+
+    output = Output(fps=23.976)
+    # A thousand frames at the decimal would land 42ms out by the end of an hour.
+    assert output.frame_time(1000) == pytest.approx(1000 * 1001 / 24000, abs=1e-9)
+    assert output.frame_count(179.808) == 4311
+
+
+def test_a_frame_rate_the_encoder_cannot_use_is_refused(tmp_path):
+    with pytest.raises(ConfigError, match="output.fps"):
+        resolve_style(write(tmp_path, "[output]\nfps = 500\n"))
 
 
 @pytest.mark.parametrize(

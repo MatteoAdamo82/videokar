@@ -79,7 +79,7 @@ def render_frames(
         "ffmpeg", "-y", "-loglevel", "error",
         "-f", "rawvideo", "-pix_fmt", "rgba",
         "-s", f"{output.width}x{output.height}",
-        "-r", str(output.fps),
+        "-r", f"{output.rate.numerator}/{output.rate.denominator}",
         "-i", "-",
     ]  # fmt: skip
     if audio_path is not None:
@@ -160,17 +160,19 @@ def render_segmented(
     """Render [start, end) in segments and concatenate them.
 
     Frame times are computed from the absolute frame index rather than
-    accumulated per segment, so a segment boundary cannot drift the timing.
+    accumulated per segment, so a segment boundary cannot drift the timing, and
+    from the exact rate rather than the decimal people write it as.
     """
     require_ffmpeg()
     codec = CODECS[output.format]
-    first_frame = int(round(start * output.fps))
-    last_frame = int(round(end * output.fps))
-    per_segment = max(1, int(output.segment_seconds * output.fps))
+    rate = float(output.rate)
+    first_frame = int(round(start * rate))
+    last_frame = int(round(end * rate))
+    per_segment = max(1, int(output.segment_seconds * rate))
     boundaries = list(range(first_frame, last_frame, per_segment))
 
     if len(boundaries) <= 1:
-        frames = (frame_at(index / output.fps) for index in range(first_frame, last_frame))
+        frames = (frame_at(output.frame_time(index)) for index in range(first_frame, last_frame))
         if on_segment:
             on_segment(1, 1)
         return render_frames(
@@ -183,7 +185,8 @@ def render_segmented(
             segment_end = min(segment_start + per_segment, last_frame)
             part = Path(workdir) / f"part{number:04d}{codec.suffix}"
             frames = (
-                frame_at(index / output.fps) for index in range(segment_start, segment_end)
+                frame_at(output.frame_time(index))
+                for index in range(segment_start, segment_end)
             )
             # Audio is muxed once, onto the concatenated result: a per-segment
             # mux would re-encode the same audio a dozen times and put an AAC

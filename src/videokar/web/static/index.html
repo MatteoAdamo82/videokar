@@ -585,9 +585,16 @@ $("#export").onclick = async () => {
             .map((p) => `<option value="${p}">${p}</option>`).join("")}
         </select>
       </label>
-      <label>frame rate<select id="expfps">
-        <option value="">from the preset</option><option>24</option><option>25</option>
-        <option>30</option><option>50</option><option>60</option>
+      <label>frame rate — match your editing timeline<select id="expfps">
+        <option value="">from the preset</option>
+        <option value="23.976">23.976 (NTSC film)</option>
+        <option value="24">24</option>
+        <option value="25">25 (PAL)</option>
+        <option value="29.97">29.97 (NTSC)</option>
+        <option value="30">30</option>
+        <option value="50">50</option>
+        <option value="59.94">59.94</option>
+        <option value="60">60</option>
       </select></label>
       <label>the words sit<select id="expanchor">
         <option value="bottom">near the bottom</option>
@@ -601,6 +608,12 @@ $("#export").onclick = async () => {
         <input type="range" id="expparen" min="50" max="120" value="72">
       </label>
     </div>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:14px">
+      <input type="checkbox" id="expaudio" checked style="width:auto">
+      carry the song in the file — it lines itself up in an editor, and cannot drift from it
+    </label>
+    <p>A clip at a rate your project does not use gets conformed, which reads as the
+       overlay falling further behind as the song goes on.</p>
     <div class="actions"><button class="primary" id="startrender">Render</button></div>
     <div id="jobs"></div>`);
 
@@ -642,6 +655,7 @@ $("#export").onclick = async () => {
           preset: s.preset,
           fps: fps ? Number(fps) : null,
           overrides: {
+            output: {audio: $("#expaudio").checked},
             layout: {
               anchor: s.anchor,
               margin_y: Math.round(presetHeight(s.preset) * s.margin_pct / 100),

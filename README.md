@@ -180,6 +180,17 @@ videokar render song.json -o overlay.mov
 | `mp4` | H.264 on an opaque background, audio muxed in |
 | `png` | numbered frames with alpha, for anything else |
 
+**Render at your editing timeline's frame rate.** A clip at a rate the project
+does not use gets conformed, and a conform reads exactly like the overlay
+starting almost right and falling further behind as the song goes on — 25fps
+stretched to 24 puts it seven seconds late by the three minute mark. The NTSC
+rates are understood as the fractions they actually are: `--fps 23.976` encodes
+at 24000/1001, not at the decimal, which would put a smaller drift back.
+
+The overlay carries the song by default. A clip holding its own audio lines
+itself up in an editor and cannot drift away from it; mute or detach the track
+once it is in place, or pass `--no-audio` if you would rather it did not.
+
 Long renders go out in segments and are concatenated with a stream copy, so a
 three minute track never depends on one ffmpeg process staying alive for three
 minutes. Frame times come from the absolute frame index rather than accumulating

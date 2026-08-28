@@ -1,5 +1,8 @@
 # Transparent overlay for an editor. ProRes 4444 with a real alpha channel,
 # to drop straight over a clip in Final Cut or Resolve.
+#
+# It carries the song. A clip holding its own audio lines itself up and cannot
+# drift away from it; mute or detach the track once it is in place.
 
 [output]
 width = 1920
@@ -7,4 +10,4 @@ height = 1080
 fps = 25
 format = "prores4444"
 background = "#00000000"
-audio = false
+audio = true

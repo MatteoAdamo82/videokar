@@ -17,6 +17,7 @@ from __future__ import annotations
 import dataclasses
 import re
 from dataclasses import field
+from fractions import Fraction
 from typing import Annotated, Literal
 
 from pydantic import BeforeValidator, Field, PlainSerializer
@@ -212,11 +213,43 @@ class Timing:
     transition: TransitionKind = "fade"
 
 
+# The NTSC rates are not the decimals people write: 23.976 is 24000/1001. Using
+# the rounded decimal puts the drift back, smaller — about two frames over an
+# hour — so the fraction is what reaches ffmpeg and what frame times are
+# computed from.
+NTSC_RATES = {
+    Fraction(24000, 1001): 23.976,
+    Fraction(30000, 1001): 29.97,
+    Fraction(48000, 1001): 47.952,
+    Fraction(60000, 1001): 59.94,
+    Fraction(120000, 1001): 119.88,
+}
+
+
+def exact_rate(fps: float) -> Fraction:
+    """The frame rate as a fraction, recognising the NTSC ones by their decimal."""
+    if abs(fps - round(fps)) < 1e-9:
+        return Fraction(int(round(fps)), 1)
+    for fraction, decimal in NTSC_RATES.items():
+        if abs(fps - decimal) < 0.01:
+            return fraction
+    return Fraction(fps).limit_denominator(100000)
+
+
 @dataclass(frozen=True)
 class Output:
     width: int = Field(default=1920, ge=16, le=16000)
     height: int = Field(default=1080, ge=16, le=16000)
-    fps: int = Field(default=25, ge=1, le=240)
+    fps: float = Field(
+        default=25,
+        gt=0,
+        le=240,
+        description=(
+            "Match your editing timeline. A clip at a rate the project does not use "
+            "gets conformed, which reads as the overlay drifting further behind as "
+            "the song goes on. 23.976 and 29.97 are understood exactly."
+        ),
+    )
     format: OutputFormat = "prores4444"
     background: RGBA = Field(
         default=(0, 0, 0, 0), description="Alpha 00 is a transparent overlay for an editor."
@@ -229,7 +262,26 @@ class Output:
             "Rendered in chunks and concatenated, so one long ffmpeg run cannot lose it all."
         ),
     )
-    audio: bool = Field(default=True, description="Mux the original audio into the result.")
+    audio: bool = Field(
+        default=True,
+        description=(
+            "Mux the song into the result. Worth leaving on even for an overlay: a "
+            "clip that carries its own audio lines itself up in an editor, and cannot "
+            "drift away from it."
+        ),
+    )
+
+    @property
+    def rate(self) -> Fraction:
+        """The frame rate as an exact fraction."""
+        return exact_rate(self.fps)
+
+    def frame_time(self, index: int) -> float:
+        """When frame `index` is shown, computed from the exact rate."""
+        return float(index / self.rate)
+
+    def frame_count(self, duration: float) -> int:
+        return int(round(duration * float(self.rate)))
 
 
 # Ratios read off the values that were tuned by eye at 1920x1080, so a default

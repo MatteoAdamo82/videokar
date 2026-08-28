@@ -112,7 +112,20 @@ All notable changes to this project are documented here. The format follows
   fixed handful, so the page can offer a control without the server learning its
   name.
 
+### Fixed
+
+- Fractional frame rates were impossible: `fps` was an integer, so 23.976 and
+  29.97 — the rates most editing timelines actually use — were refused outright.
+  A clip at a rate the project does not use gets conformed, which reads as the
+  overlay starting almost right and falling further behind as the song goes on.
+  Rates are now fractions, and the NTSC ones are kept exact as 24000/1001 rather
+  than the decimal, which would leave a smaller version of the same drift.
+
 ### Changed
+
+- The transparent overlay preset now carries the song. A clip holding its own
+  audio lines itself up in an editor and cannot drift away from it; `--no-audio`
+  and a checkbox in the export dialog turn it off.
 
 - The second voice is configured as a set of overrides rather than a whole
   second text style. Setting one thing on it — a matching size, say — used to

@@ -58,7 +58,7 @@ class RenderRequest(BaseModel):
     format: str | None = None
     width: int | None = None
     height: int | None = None
-    fps: int | None = None
+    fps: float | None = None
     overrides: dict[str, Any] | None = None
     """Anything else from the style schema. Validated by resolve_style, so the
     page can offer a control for a setting without the server learning its name."""
