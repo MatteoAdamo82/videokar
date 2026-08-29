@@ -154,6 +154,15 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- Clicking Align with nothing chosen looked like it did nothing. It said so, in
+  the status bar in the far corner of a window covered by the dialog being
+  looked at. Anything a dialog has to say now appears inside it, under the
+  button that was pressed, and the button says while it is working.
+- The accepted audio extensions were a short list that left out `.opus`, `.aac`
+  and others ffmpeg reads perfectly well. It is a guard against an obvious
+  mistake, not a codec list; ffprobe decides, and says so clearly when it
+  cannot.
+
 - Every export overwrote the same filename, so a copy downloaded earlier could
   not be told from the one just made — and since timings get corrected between
   exports, an old file looks exactly like a new one drifting. Exports are

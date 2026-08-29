@@ -19,7 +19,12 @@ from ..project.io import ProjectError
 
 logger = logging.getLogger(__name__)
 
-AUDIO_SUFFIXES = {".mp3", ".wav", ".aif", ".aiff", ".m4a", ".flac", ".ogg"}
+# A guard against an obvious mistake, not a codec list: ffprobe decides what it
+# can actually read, and says so clearly when it cannot.
+AUDIO_SUFFIXES = {
+    ".mp3", ".wav", ".aif", ".aiff", ".m4a", ".flac", ".ogg", ".oga",
+    ".opus", ".aac", ".wma", ".mp4", ".caf", ".alac", ".aifc",
+}  # fmt: skip
 SPRITE_SUFFIXES = {".png"}
 _SAFE = re.compile(r"[^A-Za-z0-9._-]+")
 

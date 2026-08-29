@@ -112,6 +112,11 @@
   .preview { display: block; width: 100%; border-radius: 8px; margin: 12px 0 4px;
              background: #0d0c14; border: 1px solid var(--line); }
   input[type=range] { width: 100%; accent-color: #6f8bff; }
+  /* Feedback for something done inside the sheet belongs inside the sheet. The
+     status bar is in the far corner of a window covered by a modal. */
+  .sheetsay { margin: 10px 0 0; min-height: 1.2em; }
+  .sheetsay.bad { color: var(--bad); font-weight: 600; }
+  .sheetsay.good { color: var(--pin); }
   .job.failed { border-color: var(--bad); }
   .job.done { border-color: var(--pin); }
   a.dl { color: #9fb4ff; }
@@ -525,6 +530,15 @@ function openSheet(html) {
   veil.classList.add("open");
 }
 
+function sheetSay(message, kind = "") {
+  const box = sheet.querySelector(".sheetsay");
+  if (box) {
+    box.textContent = message;
+    box.className = "sheetsay " + kind;
+  }
+  say(message, kind);
+}
+
 const esc = escapeHtml;
 const mmss = (s) => {
   // Round the total, not the seconds: 179.81 rounded per-part reads "2:60".
@@ -559,6 +573,7 @@ $("#library").onclick = async () => {
         <input type="checkbox" id="sep" checked style="width:auto"> isolate the vocal first
       </label>
     </div>
+    <p class="sheetsay"></p>
     <div id="jobs"></div>`);
 
   for (const item of sheet.querySelectorAll("#songlist .item")) {
@@ -577,13 +592,15 @@ $("#library").onclick = async () => {
   $("#startalign").onclick = async () => {
     const file = $("#newaudio").files[0];
     const lyrics = $("#newlyrics").value;
-    if (!file) return say("pick an audio file", "bad");
-    if (!lyrics.trim()) return say("paste the lyrics", "bad");
+    if (!file) return sheetSay("pick an audio file first", "bad");
+    if (!lyrics.trim()) return sheetSay("paste the lyrics — they are what gets aligned", "bad");
     const body = new FormData();
     body.append("audio", file);
     body.append("lyrics", lyrics);
     body.append("separate", $("#sep").checked ? "true" : "false");
     $("#startalign").disabled = true;
+    $("#startalign").textContent = "Aligning…";
+    sheetSay(`sending ${file.name}…`);
     try {
       const job = await api("/api/songs", {method: "POST", body});
       watchJob(job, async (finished) => {
@@ -597,9 +614,11 @@ $("#library").onclick = async () => {
         }
       });
     } catch (err) {
+      sheetSay(err.message, "bad");
       report(err);
     } finally {
       $("#startalign").disabled = false;
+      $("#startalign").textContent = "Align";
     }
   };
 };
@@ -702,6 +721,7 @@ $("#export").onclick = async () => {
       <button class="primary" id="startrender">Render</button>
       <span id="savedto" class="meta"></span>
     </div>
+    <p class="sheetsay"></p>
     <div id="jobs"></div>`);
   if (saved.saved) $("#savedto").textContent = `remembered in ${saved.path}`;
 
@@ -849,6 +869,7 @@ $("#export").onclick = async () => {
       });
       watchJob(job);
     } catch (err) {
+      sheetSay(err.message, "bad");
       report(err);
     } finally {
       $("#startrender").disabled = false;
@@ -898,8 +919,8 @@ function watchJob(job, onFinish) {
     if (state.status !== "running") {
       clearInterval(jobTimer);
       jobTimer = null;
-      say(state.status === "done" ? `${state.label} ready` : state.error,
-          state.status === "done" ? "good" : "bad");
+      const done = state.status === "done";
+      sheetSay(done ? `${state.label} ready` : state.error, done ? "good" : "bad");
       if (onFinish) onFinish({...job, ...state});
     }
   }, 700);

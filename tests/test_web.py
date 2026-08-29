@@ -592,3 +592,15 @@ def test_the_numbering_skips_names_already_taken(client, tmp_path):
     job = client.post("/api/render", json={"preset": "alpha"}).json()
     assert job["file"] == "song-2.mov"
     assert (tmp_path / "song-1.mov").read_bytes() == b"an earlier export"
+
+
+@pytest.mark.parametrize("name", ["song.m4a", "song.flac", "song.opus", "song.aac", "song.wav"])
+def test_the_usual_audio_files_are_accepted(client, name):
+    # The suffix check is a guard against an obvious mistake; ffprobe decides
+    # what can actually be read, and says so clearly when it cannot.
+    response = client.post(
+        "/api/songs",
+        files={"audio": (name, b"\x00" * 32, "audio/mpeg")},
+        data={"lyrics": "[Verse 1]\nhello there"},
+    )
+    assert response.status_code == 200
