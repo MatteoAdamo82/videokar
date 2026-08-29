@@ -139,7 +139,19 @@ A local page on `127.0.0.1:8712` with the waveform of the **isolated vocal**
 behind the lines — the point being that you can see where a phrase actually
 starts instead of guessing at it. Drag a line to move it, drag a word to nudge
 it, drag a word's left or right edge to change how long it lasts, double-click a
-word to retype one the aligner misheard. Space plays, arrows
+word to retype one the aligner misheard, and double-click a line — its label, or
+its row in the list — to retype the whole thing when the wording is wrong rather
+than a single word.
+
+Retyping a line can change how many words it has. Rather than spreading them
+evenly and throwing away everything that was already right, the old and new
+wordings are matched up: a word still there keeps its timing, and only the ones
+that changed are fitted between their neighbours. Fixing a typo therefore costs
+nothing.
+
+A song can be taken out of the folder with the ✕ beside it. It moves to a
+`.trash` subfolder rather than being deleted — it is somebody's work, the button
+is one click, and the audio it names is left alone. Space plays, arrows
 scrub, clicking the waveform seeks.
 
 Every edit goes through the same operations `videokar fix` uses, so pinning and
@@ -175,6 +187,7 @@ videokar render song.json -o overlay.mov   # no re-alignment
 | `list` | line ids, timings, pins and flags |
 | `shift --line L --by ±S` / `--to T` | move a line, rippling up to the next pin |
 | `stretch --from A --to B --start S --end E` | fit a run of lines into an exact span |
+| `text --line L "the line as it should read"` | retype a whole line |
 | `word --id L.wN --by ±S` / `--to T` | move one word, leaving its neighbours |
 | `pin --line L` | declare a timing correct; `--undo` to release it |
 | `mute --line L` | keep a line in the file but out of the video |

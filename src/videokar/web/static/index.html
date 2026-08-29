@@ -106,6 +106,9 @@
   .item:hover { background: #24222f; border-color: #3a3750; }
   .item.current { border-color: #6f8bff; }
   .item .meta { color: var(--dim); font-size: 11px; margin-left: auto; white-space: nowrap; }
+  .item .discard { padding: 1px 7px; font-size: 12px; opacity: 0; }
+  .item:hover .discard { opacity: 1; }
+  .item .discard:hover { background: #4a2530; border-color: var(--bad); color: #ffd9df; }
   .job { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-top: 8px; }
   .bar { height: 5px; background: #14131c; border-radius: 3px; overflow: hidden; margin-top: 7px; }
   .bar i { display: block; height: 100%; background: #6f8bff; width: 0; transition: width .2s; }
@@ -293,6 +296,7 @@ function render() {
       // Which way to drag it, not merely that something is wrong.
       row.title = `starts ${off > 0 ? "after" : "before"} the voice comes in, by ${Math.abs(off).toFixed(2)}s`;
     }
+    row.ondblclick = (event) => { event.stopPropagation(); retypeLine(line); };
     if (selected === line.id) row.classList.add("active");
     row.innerHTML = `<span class="id">${line.id}</span><span class="txt">${escapeHtml(wordsText(line))}</span>`;
     row.onclick = () => {
@@ -315,6 +319,10 @@ function render() {
       ? ` · ${offBy > 0 ? "+" : ""}${offBy.toFixed(2)}s from the attack` : "";
     block.innerHTML = `<span class="label">${line.id} · ${line.start.toFixed(2)}${
       line.flags.length ? " · " + line.flags.join(",") : ""}${offNote}</span>`;
+    block.querySelector(".label").ondblclick = (event) => {
+      event.stopPropagation();
+      retypeLine(line);
+    };
 
     const tools = document.createElement("div");
     tools.className = "tools";
@@ -430,6 +438,17 @@ function retype(el, word) {
     if (event.key === "Enter") finish(true);
     if (event.key === "Escape") finish(false);
   };
+}
+
+function retypeLine(line) {
+  const current = line.words.map((w) => w.text).join(" ");
+  const typed = window.prompt(
+    `Line ${line.id} — retype it.\nWords that survive keep their timing; ` +
+    `new ones are fitted between their neighbours.`,
+    current,
+  );
+  if (typed === null || typed.trim() === current) return;
+  edit({op: "set_line_text", line: line.id, text: typed});
 }
 
 // ---- dragging -------------------------------------------------------------
@@ -559,6 +578,8 @@ $("#library").onclick = async () => {
             <div class="item ${song.path === data.open ? "current" : ""}" data-path="${esc(song.path)}">
               <span>${esc(song.title)}</span>
               <span class="meta">${song.lines} lines · ${song.flagged} flagged · ${mmss(song.duration)}</span>
+              <button class="discard" data-path="${esc(song.path)}" data-title="${esc(song.title)}"
+                      title="move to .trash">✕</button>
             </div>`).join("")
         : "<p>Nothing here yet. Add a song below.</p>"
     }</div>
@@ -575,6 +596,24 @@ $("#library").onclick = async () => {
     </div>
     <p class="sheetsay"></p>
     <div id="jobs"></div>`);
+
+  for (const button of sheet.querySelectorAll("#songlist .discard")) {
+    button.onclick = async (event) => {
+      event.stopPropagation();
+      const title = button.dataset.title;
+      if (!window.confirm(
+        `Move "${title}" to .trash?\n\nThe file is not deleted — it goes into a ` +
+        `.trash folder beside the others, so it can be brought back.`)) return;
+      try {
+        await api("/api/discard", {
+          method: "POST", headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({path: button.dataset.path, media: false}),
+        });
+        sheetSay(`${title} moved to .trash`, "good");
+        $("#library").click();
+      } catch (err) { sheetSay(err.message, "bad"); }
+    };
+  }
 
   for (const item of sheet.querySelectorAll("#songlist .item")) {
     item.onclick = async () => {

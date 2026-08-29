@@ -152,6 +152,14 @@ All notable changes to this project are documented here. The format follows
   lyrics, so it costs no second render and cannot drift out of step. Off unless
   asked for, from `--visualiser`, the config file, or the export dialog.
 
+- A whole line can be retyped, from `videokar fix text` or by double-clicking
+  the line in the view. Words that survive the change keep their timing — old
+  and new wordings are matched up rather than the line being redistributed — so
+  fixing a typo costs nothing and an added word is fitted between its
+  neighbours.
+- A song can be taken out of the folder from the view. It moves to a `.trash`
+  subfolder rather than being deleted, and the audio it names is left alone.
+
 ### Fixed
 
 - Clicking Align with nothing chosen looked like it did nothing. It said so, in

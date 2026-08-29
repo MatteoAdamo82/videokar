@@ -31,6 +31,7 @@ from ..project import check_song, load_song, save_song
 from ..project.edit import (
     FixError,
     set_line_start,
+    set_line_text,
     set_pinned,
     set_sung,
     set_word_span,
@@ -72,6 +73,16 @@ class RenderRequest(BaseModel):
 
 class OpenRequest(BaseModel):
     path: str
+
+
+class TextRequest(BaseModel):
+    line: str
+    text: str
+
+
+class DiscardRequest(BaseModel):
+    path: str
+    media: bool = False
 
 
 class StyleRequest(BaseModel):
@@ -263,6 +274,21 @@ def create_app(
         path = session.workdir / SETTINGS
         path.write_text(to_partial_toml(request.preset, request.overrides), encoding="utf-8")
         return {"path": str(path), "saved": True}
+
+    @app.post("/api/discard")
+    def discard_song(request: DiscardRequest) -> dict[str, Any]:
+        """Move a song out of the folder, into .trash where it can be got back."""
+        path = Path(request.path)
+        try:
+            moved = library.discard(path, session.workdir, media=request.media)
+        except ValueError as exc:
+            raise HTTPException(403, str(exc)) from exc
+        except OSError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        if session.song_path == path:
+            session.song_path = None
+            session.history.clear()
+        return {"moved": moved, "songs": [e.as_dict() for e in library.scan(session.workdir)]}
 
     @app.get("/api/peaks")
     def get_peaks() -> dict[str, Any]:
@@ -660,6 +686,8 @@ def _dispatch(song, request: EditRequest) -> Any:
         return set_word_span(song, request.word, request.start, request.end)
     if op == "set_text":
         return set_word_text(song, request.word, request.text or "")
+    if op == "set_line_text":
+        return set_line_text(song, request.line, request.text or "")
     if op == "pin":
         return set_pinned(song, request.line, bool(request.value))
     if op == "mute":

@@ -604,3 +604,47 @@ def test_the_usual_audio_files_are_accepted(client, name):
         data={"lyrics": "[Verse 1]\nhello there"},
     )
     assert response.status_code == 200
+
+
+def test_a_song_is_moved_to_trash_not_deleted(client, tmp_path):
+    response = client.post("/api/discard", json={"path": str(tmp_path / "song.json")})
+    assert response.status_code == 200
+    assert not (tmp_path / "song.json").exists()
+    # Somebody's work, one click, and a mistake costs an alignment run.
+    assert (tmp_path / ".trash" / "song.json").exists()
+
+
+def test_discarding_the_open_song_leaves_nothing_open(client, tmp_path):
+    client.post("/api/discard", json={"path": str(tmp_path / "song.json")})
+    assert client.get("/api/song").status_code == 409
+
+
+def test_a_song_outside_the_folder_cannot_be_discarded(client, tmp_path):
+    assert client.post(
+        "/api/discard", json={"path": str(tmp_path.parent / "elsewhere.json")}
+    ).status_code == 403
+
+
+def test_discarding_twice_keeps_both_copies(client, tmp_path):
+    from conftest import make_line, make_song
+    from videokar.project import save_song
+
+    client.post("/api/discard", json={"path": str(tmp_path / "song.json")})
+    save_song(make_song(make_line("l0", ["x"], 1.0)), tmp_path / "song.json")
+    client.post("/api/discard", json={"path": str(tmp_path / "song.json")})
+    assert (tmp_path / ".trash" / "song.json").exists()
+    assert (tmp_path / ".trash" / "song-1.json").exists()
+
+
+def test_the_audio_is_left_alone_unless_asked_for(client, tmp_path):
+    (tmp_path / "a.mp3").write_bytes(b"audio")
+    client.post("/api/discard", json={"path": str(tmp_path / "song.json")})
+    assert (tmp_path / "a.mp3").exists()
+
+
+def test_retyping_a_line_through_the_api(client):
+    response = client.post(
+        "/api/edit", json={"op": "set_line_text", "line": "l1", "text": "d e f g"}
+    )
+    assert response.status_code == 200
+    assert load_song(client.song_path).line("l1").words_text == "d e f g"

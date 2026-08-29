@@ -595,6 +595,24 @@ def fix_word(
     _apply(song, song_path, edit, dry_run)
 
 
+@fix_app.command("text")
+def fix_text(
+    song_path: SongArg,
+    line_id: Annotated[str, typer.Option("--line", "-l", help="Line id, e.g. l12.")],
+    text: Annotated[str, typer.Argument(help="The line as it should read.")],
+    dry_run: DryRun = False,
+) -> None:
+    """Retype a whole line. Words that survive keep their timing."""
+    from .project.edit import FixError, set_line_text
+
+    song = _open(song_path)
+    try:
+        edit = set_line_text(song, line_id, text)
+    except (FixError, KeyError) as exc:
+        _fail(str(exc))
+    _apply(song, song_path, edit, dry_run)
+
+
 @fix_app.command("stretch")
 def fix_stretch(
     song_path: SongArg,

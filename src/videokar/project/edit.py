@@ -15,6 +15,7 @@ edit and the next anchor are redistributed into whatever span is left.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 
 from ..lyrics.normalize import normalize_token
 from .model import Line, Song, Word
@@ -303,3 +304,125 @@ def set_word_text(song: Song, word_id: str, text: str) -> Edit:
     word.manual = True
     line.rebuild_text()
     return Edit([line.id], f"{word_id}: {was!r} -> {text!r}")
+
+
+def set_line_text(song: Song, line_id: str, text: str) -> Edit:
+    """Retype a whole line, keeping the timings of the words that survive.
+
+    Changing a line can change how many words it has, so the timings have to be
+    reassigned. Rather than spreading the new words evenly and throwing away
+    everything that was right, the old and new wordings are matched up: a word
+    that is still there keeps its timing, and only the ones that changed are
+    given new times, interpolated between the words on either side of them.
+
+    Fixing a typo therefore costs nothing, and adding a word squeezes it in
+    beside its neighbours instead of shifting the whole line.
+    """
+    text = " ".join(text.split())
+    if not text:
+        raise FixError("a line cannot be emptied — mute it instead, so it keeps its place")
+
+    line = song.line(line_id)
+    tokens = text.split()
+    old = list(line.words)
+    old_forms = [normalize_token(w.text, lang=song.align.language) or "" for w in old]
+    new_forms = [normalize_token(t, lang=song.align.language) or "" for t in tokens]
+
+    kept: dict[int, Word] = {}
+    for tag, i1, i2, j1, _ in SequenceMatcher(
+        a=old_forms, b=new_forms, autojunk=False
+    ).get_opcodes():
+        if tag == "equal":
+            for offset in range(i2 - i1):
+                kept[j1 + offset] = old[i1 + offset]
+
+    span_start = line.start if line.start is not None else 0.0
+    span_end = line.end if line.end is not None else span_start
+    words: list[Word] = []
+    for position, token in enumerate(tokens):
+        source = kept.get(position)
+        words.append(
+            Word(
+                id=f"{line.id}.w{position}",
+                text=token,
+                norm=normalize_token(token, lang=song.align.language),
+                start=source.start if source else None,
+                end=source.end if source else None,
+                score=source.score if source else None,
+                manual=True,
+            )
+        )
+
+    # A line may grow into the silence after it, but not into the next line.
+    following = [
+        other for other in timed_lines(song) if other.start is not None and other.start > span_end
+    ]
+    limit = (following[0].start - MIN_GAP) if following else float("inf")
+    _fill_gaps(words, span_start, span_end, limit)
+    line.words = words
+    line.rebuild_text()
+    song.refresh_bounds()
+    changed = len(tokens) - len(kept)
+    detail = f", {changed} word(s) retimed" if changed else ", every timing kept"
+    return Edit([line.id], f"{line_id} is now {text!r}{detail}")
+
+
+def _tail(share: float) -> float:
+    """The sliver left between two words. Proportional, because a fixed gap
+    inside a fifty-millisecond hole leaves a word ten milliseconds long."""
+    return min(MIN_GAP, share * 0.2)
+
+
+def _fill_gaps(
+    words: list[Word], span_start: float, span_end: float, limit: float = float("inf")
+) -> None:
+    """Give the words with no timing one, between whatever surrounds them.
+
+    `limit` is how far the line may grow: words appended past the end need room
+    that is not inside the line, and the only room there is belongs to the
+    silence before the next line.
+    """
+    anchors = [index for index, word in enumerate(words) if word.timed]
+    if not anchors:
+        # Nothing survived, so the line is spread across the span it occupied.
+        step = (span_end - span_start) / max(len(words), 1)
+        for index, word in enumerate(words):
+            word.start = round(span_start + index * step, 3)
+            word.end = round(span_start + (index + 1) * step - _tail(step), 3)
+        return
+
+    # Every run of untimed words is worked out before any of them is given a
+    # time: computing them as we go would look at a list that is changing
+    # underneath, and the second word of a run would land on top of the first.
+    runs: list[list[int]] = []
+    current: list[int] = []
+    for index, word in enumerate(words):
+        if word.timed:
+            if current:
+                runs.append(current)
+                current = []
+        else:
+            current.append(index)
+    if current:
+        runs.append(current)
+
+    for run in runs:
+        before = max((i for i in anchors if i < run[0]), default=None)
+        after = min((i for i in anchors if i > run[-1]), default=None)
+        low = words[before].end if before is not None else span_start
+        high = words[after].start if after is not None else span_end
+
+        needed = len(run) * (MIN_WORD + MIN_GAP)
+        if high - low < needed and after is None:
+            # Words appended past the end have nowhere to go inside the line, so
+            # it grows — as far as the next line and no further. Without this
+            # they came out with start == end, which is not a word at all.
+            high = min(low + needed, limit)
+        share = max((high - low) / len(run), 0.001)
+
+        for place, index in enumerate(run):
+            word = words[index]
+            word.start = round(low + share * place, 3)
+            word.end = round(low + share * (place + 1) - _tail(share), 3)
+            if word.end <= word.start:
+                word.end = round(word.start + 0.001, 3)

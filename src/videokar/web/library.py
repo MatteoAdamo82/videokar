@@ -138,3 +138,56 @@ def next_output(directory: Path, stem: str, suffix: str, taken: set[str] | None 
         if not candidate.exists() and candidate.name not in taken:
             return candidate
     raise RuntimeError(f"ten thousand exports of {stem}; something is wrong")
+
+
+TRASH = ".trash"
+
+
+def discard(path: Path, workdir: Path, *, media: bool = False) -> list[str]:
+    """Take a song out of the folder, keeping it recoverable.
+
+    Moved into a .trash subfolder rather than deleted. This is somebody's work,
+    the button is one click, and a mistake here costs an alignment run at best.
+
+    `media` also removes the audio the document names, which is only safe when
+    nothing else in the folder refers to it — so that is checked rather than
+    assumed.
+    """
+    if path.parent.resolve() != workdir.resolve():
+        raise ValueError("that file is outside the working directory")
+
+    targets = [path]
+    if media:
+        try:
+            audio = Path(load_song(path).audio.path)
+        except (OSError, ProjectError):
+            audio = None
+        if audio is not None:
+            local = workdir / audio.name
+            others = [
+                other
+                for other in workdir.glob("*.json")
+                if other != path and _names_audio(other, audio.name)
+            ]
+            if local.is_file() and not others:
+                targets.append(local)
+
+    bin_folder = workdir / TRASH
+    bin_folder.mkdir(exist_ok=True)
+    moved = []
+    for target in targets:
+        destination = bin_folder / target.name
+        for number in range(1, 1000):
+            if not destination.exists():
+                break
+            destination = bin_folder / f"{target.stem}-{number}{target.suffix}"
+        target.rename(destination)
+        moved.append(target.name)
+    return moved
+
+
+def _names_audio(document: Path, name: str) -> bool:
+    try:
+        return Path(load_song(document).audio.path).name == name
+    except (OSError, ProjectError):
+        return False

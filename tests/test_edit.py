@@ -175,3 +175,112 @@ def test_unmuting_leaves_the_line_needing_a_realign():
 def test_an_unknown_line_is_reported_clearly():
     with pytest.raises(FixError, match="l99"):
         shift_line(four_lines(), "l99", 1.0)
+
+
+def test_retyping_a_line_keeps_the_timings_of_the_words_that_survive():
+    from videokar.project.edit import set_line_text
+
+    song = make_song(make_line("l0", ["Two", "person", "and", "gone"], 10.0))
+    before = {w.text: (w.start, w.end) for w in song.line("l0").words}
+    set_line_text(song, "l0", "Two purrs and gone")
+    after = {w.text: (w.start, w.end) for w in song.line("l0").words}
+    # Fixing one word costs nothing anywhere else.
+    for word in ("Two", "and", "gone"):
+        assert after[word] == before[word]
+
+
+def test_a_word_added_by_retyping_is_fitted_between_its_neighbours():
+    from videokar.project.edit import set_line_text
+
+    song = make_song(make_line("l0", ["one", "three"], 10.0))
+    set_line_text(song, "l0", "one two three")
+    words = song.line("l0").words
+    assert [w.text for w in words] == ["one", "two", "three"]
+    assert words[0].end <= words[1].start
+    assert words[1].end <= words[2].start
+
+
+def test_retyping_can_shorten_a_line():
+    from videokar.project.edit import set_line_text
+
+    song = make_song(make_line("l0", ["one", "two", "three", "four"], 10.0))
+    set_line_text(song, "l0", "one four")
+    assert [w.text for w in song.line("l0").words] == ["one", "four"]
+    assert song.line("l0").text == "one four"
+
+
+def test_retyping_everything_spreads_the_words_over_the_old_span():
+    from videokar.project.edit import set_line_text
+
+    song = make_song(make_line("l0", ["aaa", "bbb"], 10.0))
+    start, end = song.line("l0").start, song.line("l0").end
+    set_line_text(song, "l0", "completely different words here")
+    words = song.line("l0").words
+    assert len(words) == 4
+    assert words[0].start == pytest.approx(start, abs=0.01)
+    assert words[-1].end == pytest.approx(end, abs=0.05)
+
+
+def test_retyping_marks_the_line_as_touched_by_hand():
+    from videokar.project.edit import set_line_text
+
+    song = make_song(make_line("l0", ["one", "two"], 10.0))
+    set_line_text(song, "l0", "one three")
+    assert all(w.manual for w in song.line("l0").words)
+
+
+def test_a_line_cannot_be_emptied_by_retyping():
+    from videokar.project.edit import FixError, set_line_text
+
+    song = make_song(make_line("l0", ["one", "two"], 10.0))
+    with pytest.raises(FixError, match="mute it instead"):
+        set_line_text(song, "l0", "   ")
+
+
+def test_retyping_leaves_the_timeline_in_order():
+    from videokar.project.edit import set_line_text
+
+    song = four_lines()
+    set_line_text(song, "l1", "d e f g h")
+    timed = [w for w in song.words if w.timed]
+    assert all(a.end <= b.start + 1e-6 for a, b in zip(timed, timed[1:], strict=False))
+
+
+def test_a_word_appended_past_the_end_gets_a_real_duration():
+    from videokar.project.edit import MIN_WORD, set_line_text
+
+    # There is no room after the last word, so the line grows rather than the
+    # new word coming out with start == end, which is not a word at all.
+    song = make_song(make_line("l0", ["one", "two"], 10.0))
+    end_before = song.line("l0").end
+    set_line_text(song, "l0", "one two three")
+    words = song.line("l0").words
+    assert words[-1].end - words[-1].start >= MIN_WORD
+    assert song.line("l0").end > end_before
+
+
+def test_retyping_never_makes_a_word_of_no_length():
+    from videokar.project.edit import set_line_text
+
+    song = make_song(make_line("l0", ["one", "two"], 10.0))
+    set_line_text(song, "l0", "one a b c d two e f")
+    assert all(w.end > w.start for w in song.line("l0").words)
+
+
+def test_retyping_leaves_check_with_nothing_to_report():
+    from videokar.project import check_song
+    from videokar.project.edit import set_line_text
+
+    song = four_lines()
+    set_line_text(song, "l1", "d e f g h i")
+    assert check_song(song).errors == []
+
+
+
+def test_a_line_grows_into_the_silence_but_not_into_the_next_line():
+    from videokar.project.edit import set_line_text
+
+    song = four_lines()
+    limit = song.line("l2").start
+    set_line_text(song, "l1", "d e f g h i j k l m n o p q r s t")
+    assert song.line("l1").end <= limit
