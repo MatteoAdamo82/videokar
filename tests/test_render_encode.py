@@ -100,3 +100,37 @@ def test_a_frame_of_the_wrong_size_is_refused(tmp_path):
     wrong = (Image.new("RGBA", (64, 64)) for _ in range(3))
     with pytest.raises(EncodeError, match="64x64"):
         render_frames(wrong, tmp_path / "out.mov", TINY)
+
+
+@needs_ffmpeg
+def test_a_segment_with_a_visualiser_lasts_as_long_as_its_frames(tmp_path):
+    """The bug this guards: each segment came out as long as the whole song."""
+    import json
+    import subprocess
+
+    audio = tmp_path / "tone.wav"
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "sine=f=440:d=8", str(audio)],
+        check=True,
+    )
+    from videokar.config import Visualiser
+    from videokar.render.visualiser import filter_chain
+
+    output = Output(width=32, height=32, fps=10)
+    destination = tmp_path / "part.mov"
+    # Two seconds of frames against eight seconds of audio.
+    render_frames(
+        (frame(i * 10) for i in range(20)),
+        destination,
+        output,
+        audio_path=audio,
+        mux_audio=False,
+        visualiser=filter_chain(Visualiser(kind="freqs"), output),
+    )
+    probe = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "json",
+         str(destination)],
+        capture_output=True, text=True, check=True,
+    )  # fmt: skip
+    seconds = float(json.loads(probe.stdout)["format"]["duration"])
+    assert seconds < 3.0, f"the segment ran to {seconds:.1f}s, past the frames it was given"

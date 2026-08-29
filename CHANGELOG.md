@@ -162,6 +162,13 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- With the visualiser on, the words froze on whichever line the first segment
+  ended on and stayed there for the rest of the video, while the band carried on
+  moving. The overlay's base is the analysis, which runs to the end of the song,
+  and the frames handed to it are one segment long — so the output lasted as
+  long as the audio and the last frame it had been given was repeated to fill
+  it. The overlay now ends with the frames.
+
 - The ✕ beside a song did nothing, and so did double-clicking a line to retype
   it. Both went through `window.confirm` and `window.prompt`, and a browser that
   has been told to stop showing dialogs — one checkbox, and the prompt for

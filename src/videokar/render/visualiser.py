@@ -59,5 +59,10 @@ def filter_chain(visualiser: Visualiser, output: Output) -> str | None:
         # Padded onto a transparent frame-sized canvas, which is what puts it in
         # position and lets the words go on top of it rather than under.
         f"pad={output.width}:{output.height}:{x}:{y}:color=0x00000000[viz];"
-        f"[viz][0:v]overlay=0:0:format=auto[out]"
+        # shortest=1 because the base here is the analysis, which runs to the
+        # end of the song, while the frames are one segment long. Without it the
+        # output lasts as long as the audio and overlay repeats the last frame
+        # it was given — the words freeze on whatever line the segment ended on
+        # and stay there for the rest of the video.
+        f"[viz][0:v]overlay=0:0:format=auto:shortest=1[out]"
     )

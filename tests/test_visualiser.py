@@ -72,3 +72,12 @@ def test_a_visualiser_without_audio_is_refused():
 
     with pytest.raises(EncodeError, match="needs the audio"):
         render_frames(iter([]), "unused.mov", OUTPUT, visualiser="[1:a]anull[out]")
+
+
+def test_the_output_ends_with_the_frames_not_with_the_song():
+    # The base of the overlay is the analysis, which runs to the end of the
+    # audio, while the frames handed in are one segment long. Without this the
+    # segment lasted as long as the whole song and overlay repeated the last
+    # frame it was given — the words froze on whichever line the segment ended
+    # on and stayed there for the rest of the video.
+    assert "shortest=1" in filter_chain(Visualiser(kind="freqs"), OUTPUT)
