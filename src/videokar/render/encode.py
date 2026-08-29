@@ -51,6 +51,17 @@ CODECS: dict[str, Codec] = {
         suffix=".mp4",
         keeps_alpha=False,
     ),
+    # Both lossless, both carry alpha, and both are a fraction of the size for
+    # this kind of picture — flat colour over a transparent field is the worst
+    # case for an intra-frame DCT codec and the best case for these. Animation
+    # wins on plain lyrics, PNG on anything with a visualiser in it, and neither
+    # decodes appreciably slower than ProRes.
+    "animation": Codec(
+        args=["-c:v", "qtrle", "-pix_fmt", "argb"], suffix=".mov", keeps_alpha=True
+    ),
+    "png_mov": Codec(
+        args=["-c:v", "png", "-pix_fmt", "rgba"], suffix=".mov", keeps_alpha=True
+    ),
     "png": Codec(args=["-c:v", "png"], suffix="", keeps_alpha=True),
 }
 

@@ -33,7 +33,7 @@ def test_flatten_makes_a_translucent_frame_opaque():
 
 
 def test_every_documented_format_has_a_codec():
-    assert set(CODECS) == {"prores4444", "mp4", "png"}
+    assert set(CODECS) == {"prores4444", "animation", "png_mov", "mp4", "png"}
 
 
 def test_png_sequence_is_numbered_from_the_start_frame(tmp_path):
@@ -134,3 +134,38 @@ def test_a_segment_with_a_visualiser_lasts_as_long_as_its_frames(tmp_path):
     )  # fmt: skip
     seconds = float(json.loads(probe.stdout)["format"]["duration"])
     assert seconds < 3.0, f"the segment ran to {seconds:.1f}s, past the frames it was given"
+
+
+@needs_ffmpeg
+@pytest.mark.parametrize("fmt", ["prores4444", "animation", "png_mov"])
+def test_every_overlay_format_keeps_its_alpha(tmp_path, fmt):
+    """The point of all three is a transparent overlay; a format that flattened
+    it would be useless however small it came out."""
+    import json
+    import subprocess
+
+    output = Output(width=32, height=32, fps=10, format=fmt, background=(0, 0, 0, 0))
+    destination = tmp_path / f"out{CODECS[fmt].suffix}"
+    render_frames((frame(120) for _ in range(5)), destination, output)
+
+    probe = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0",
+         "-show_entries", "stream=pix_fmt", "-of", "json", str(destination)],
+        capture_output=True, text=True, check=True,
+    )  # fmt: skip
+    pixel_format = json.loads(probe.stdout)["streams"][0]["pix_fmt"]
+    assert "a" in pixel_format, f"{fmt} came out as {pixel_format}, with no alpha"
+
+
+@needs_ffmpeg
+def test_the_lossless_formats_are_smaller_than_prores(tmp_path):
+    # The whole reason they are offered. Flat colour on a transparent field is
+    # the worst case for an intra-frame DCT codec.
+    sizes = {}
+    for fmt in ("prores4444", "animation", "png_mov"):
+        output = Output(width=32, height=32, fps=10, format=fmt, background=(0, 0, 0, 0))
+        destination = tmp_path / f"{fmt}{CODECS[fmt].suffix}"
+        render_frames((frame(120) for _ in range(10)), destination, output)
+        sizes[fmt] = destination.stat().st_size
+    assert sizes["animation"] < sizes["prores4444"]
+    assert sizes["png_mov"] < sizes["prores4444"]

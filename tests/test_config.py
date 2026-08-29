@@ -170,7 +170,7 @@ def test_an_unset_size_stays_unset_through_a_round_trip(tmp_path):
 
 def test_the_written_file_explains_itself():
     text = to_toml(Style())
-    assert "# 'mp4' | 'prores4444' | 'png'" in text
+    assert "'prores4444'" in text and "'png_mov'" in text
     assert "makes a karaoke video look broken" in text
 
 
@@ -183,6 +183,8 @@ def test_the_schema_describes_every_section():
     assert schema["$defs"]["Output"]["properties"]["format"]["enum"] == [
         "mp4",
         "prores4444",
+        "animation",
+        "png_mov",
         "png",
     ]
 

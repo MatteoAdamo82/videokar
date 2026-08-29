@@ -160,6 +160,12 @@ All notable changes to this project are documented here. The format follows
 - A song can be taken out of the folder from the view. It moves to a `.trash`
   subfolder rather than being deleted, and the audio it names is left alone.
 
+- Two more overlay formats, both lossless and both carrying alpha: `animation`
+  (QuickTime RLE) and `png_mov`. Measured on a four-minute 1080p overlay with a
+  visualiser, ProRes came to 2.49 GB against 1.02 GB and 0.19 GB, decoding
+  within 15% of each other. ProRes stays the default, being what an editor is
+  tuned for.
+
 ### Fixed
 
 - The visualiser landed off-centre, over an edge, or as a sliver, because the

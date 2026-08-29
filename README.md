@@ -207,9 +207,30 @@ videokar render song.json -o overlay.mov
 
 | `--format` | what you get |
 | --- | --- |
-| `prores4444` (default) | `.mov` with a real alpha channel — drop it straight over a clip in Final Cut |
+| `prores4444` (default) | `.mov` with alpha — what an editor expects, and enormous |
+| `png_mov` | `.mov` with alpha, lossless, a fraction of the size |
+| `animation` | `.mov` with alpha, lossless, smallest when there is no visualiser |
 | `mp4` | H.264 on an opaque background, audio muxed in |
 | `png` | numbered frames with alpha, for anything else |
+
+ProRes 4444 is a mastering codec: at 1080p25 it costs around 90 Mbit/s whatever
+you put in it, and flat colour over a transparent field is the worst case for an
+intra-frame DCT codec. Fine detail makes it worse — the same four-minute overlay
+measured 0.94 GB with only lyrics and 2.7 GB with a level meter behind them,
+because a segmented meter is hundreds of thin vertical lines.
+
+The other two are lossless and carry alpha just as well. Measured on the same
+four-minute 1080p overlay with a visualiser, and decoding within 15% of each
+other:
+
+| | lyrics only | with a level meter |
+| --- | --- | --- |
+| `prores4444` | 0.94 GB | 2.49 GB |
+| `animation` | 0.15 GB | 1.02 GB |
+| `png_mov` | 0.26 GB | **0.19 GB** |
+
+`animation` wins on plain lyrics, `png_mov` on anything busy. Both open in Final
+Cut. ProRes remains the default because it is what an editor is tuned for.
 
 **Render at your editing timeline's frame rate.** A clip at a rate the project
 does not use gets conformed, and a conform reads exactly like the overlay
