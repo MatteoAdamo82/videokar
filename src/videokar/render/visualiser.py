@@ -18,12 +18,21 @@ from ..config.schema import Output, Visualiser
 FILTERS = {
     "freqs": "showfreqs=s={w}x{h}:mode={mode}:colors={colour}",
     "waves": "showwaves=s={w}x{h}:mode=cline:colors={colour}",
-    "volume": "showvolume=w={w}:h={h}:c={colour}:b=0:f=0.6",
+    # showvolume's `c` is not a colour but an expression evaluated per channel,
+    # so it rejects "#ffffff" outright — and the number it wants is packed
+    # AABBGGRR rather than the usual order.
+    "volume": "showvolume=w={w}:h={h}:c={packed}:b=0:f=0.6",
 }
 
 
 def _hex(colour: tuple[int, int, int, int]) -> str:
     return "#" + "".join(f"{channel:02x}" for channel in colour[:3])
+
+
+def _packed(colour: tuple[int, int, int, int]) -> str:
+    """The same colour as the number showvolume's expression wants: AABBGGRR."""
+    red, green, blue, alpha = colour
+    return f"0x{alpha:02x}{blue:02x}{green:02x}{red:02x}"
 
 
 def placement(visualiser: Visualiser, output: Output) -> tuple[int, int, int, int]:
@@ -51,7 +60,11 @@ def filter_chain(visualiser: Visualiser, output: Output) -> str | None:
         return None
     width, height, x, y = placement(visualiser, output)
     analysis = FILTERS[visualiser.kind].format(
-        w=width, h=height, mode=visualiser.mode, colour=_hex(visualiser.colour)
+        w=width,
+        h=height,
+        mode=visualiser.mode,
+        colour=_hex(visualiser.colour),
+        packed=_packed(visualiser.colour),
     )
     return (
         f"[1:a]{analysis},format=rgba,"

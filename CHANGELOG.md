@@ -162,6 +162,13 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- The level-meter visualiser was refused by ffmpeg outright. `showvolume`'s `c`
+  is not a colour but an expression, so a colour was never a valid value for it,
+  and the number it does take is packed AABBGGRR rather than in the usual order.
+  Every kind is now run through ffmpeg by a test rather than only being built as
+  a string, which is how this survived: the string was well-formed and nobody
+  had ever asked ffmpeg what it thought of it.
+
 - With the visualiser on, the words froze on whichever line the first segment
   ended on and stayed there for the rest of the video, while the band carried on
   moving. The overlay's base is the analysis, which runs to the end of the song,

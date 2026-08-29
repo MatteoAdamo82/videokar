@@ -81,3 +81,34 @@ def test_the_output_ends_with_the_frames_not_with_the_song():
     # frame it was given — the words froze on whichever line the segment ended
     # on and stayed there for the rest of the video.
     assert "shortest=1" in filter_chain(Visualiser(kind="freqs"), OUTPUT)
+
+
+# Every kind is run through ffmpeg, not merely built as a string. The string
+# tests above passed for months on a `volume` filter ffmpeg refuses outright:
+# its colour option is an expression, and a colour is not a valid one.
+needs_ffmpeg = pytest.mark.skipif(
+    __import__("shutil").which("ffmpeg") is None, reason="ffmpeg is not on PATH"
+)
+
+
+@needs_ffmpeg
+@pytest.mark.parametrize("kind", ["freqs", "waves", "volume"])
+@pytest.mark.parametrize("colour", [(255, 255, 255, 255), (255, 120, 70, 255)])
+def test_ffmpeg_accepts_the_chain(tmp_path, kind, colour):
+    import subprocess
+
+    output = Output(width=320, height=180, fps=10)
+    chain = filter_chain(Visualiser(kind=kind, colour=colour), output)
+    result = subprocess.run(
+        [
+            "ffmpeg", "-v", "error", "-y",
+            "-f", "lavfi", "-i", "color=c=black@0.0:s=320x180:r=10,format=rgba",
+            "-f", "lavfi", "-i", "sine=f=440:d=2",
+            "-filter_complex", chain, "-map", "[out]", "-frames:v", "10",
+            "-c:v", "prores_ks", "-profile:v", "4444", "-pix_fmt", "yuva444p10le",
+            str(tmp_path / f"{kind}.mov"),
+        ],
+        capture_output=True, text=True,
+    )  # fmt: skip
+    assert result.returncode == 0, f"{kind}: {result.stderr.strip()}"
+    assert (tmp_path / f"{kind}.mov").stat().st_size > 0
