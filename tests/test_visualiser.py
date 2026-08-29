@@ -112,3 +112,43 @@ def test_ffmpeg_accepts_the_chain(tmp_path, kind, colour):
     )  # fmt: skip
     assert result.returncode == 0, f"{kind}: {result.stderr.strip()}"
     assert (tmp_path / f"{kind}.mov").stat().st_size > 0
+
+
+@needs_ffmpeg
+@pytest.mark.parametrize("kind", ["freqs", "waves", "volume"])
+def test_the_band_lands_inside_the_box_it_asked_for(tmp_path, kind):
+    """Each filter lays itself out its own way and none of them come out at the
+    size they were asked for: one stacks a row per channel and adds a decibel
+    readout, another leaves most of its canvas empty. Left untouched the band
+    landed off-centre, over an edge, or as a sliver."""
+    import subprocess
+
+    from PIL import Image
+
+    output = Output(width=640, height=360, fps=25)
+    visualiser = Visualiser(kind=kind)
+    width, height, x, y = placement(visualiser, output)
+    frames = tmp_path / "f_%02d.png"
+    subprocess.run(
+        [
+            "ffmpeg", "-v", "error", "-y",
+            "-f", "lavfi", "-i", "color=c=black@0.0:s=640x360:r=25,format=rgba",
+            "-f", "lavfi", "-i", "sine=f=440:d=3",
+            "-filter_complex", filter_chain(visualiser, output), "-map", "[out]",
+            "-frames:v", "20", "-c:v", "png", str(frames),
+        ],
+        check=True, capture_output=True,
+    )  # fmt: skip
+
+    drawn = Image.open(tmp_path / "f_18.png").convert("RGBA").getbbox()
+    assert drawn is not None, f"{kind} drew nothing at all"
+    left, top, right, bottom = drawn
+    assert left >= x - 1 and right <= x + width + 1, f"{kind} runs past the sides"
+    assert top >= y - 1 and bottom <= y + height + 1, f"{kind} runs past the top or bottom"
+    if kind == "volume":
+        # A meter's length is the level, so how much of the box it fills is the
+        # signal talking. What matters is that it starts at the left edge.
+        assert left <= x + 2, f"{kind} does not start at the left of its box"
+    else:
+        # These two always span the width; anything less means clipping.
+        assert (right - left) > width * 0.8, f"{kind} covers only {right - left} of {width}"

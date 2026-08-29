@@ -16,12 +16,28 @@ from __future__ import annotations
 from ..config.schema import Output, Visualiser
 
 FILTERS = {
-    "freqs": "showfreqs=s={w}x{h}:mode={mode}:colors={colour}",
-    "waves": "showwaves=s={w}x{h}:mode=cline:colors={colour}",
+    # fscale=log because music is logarithmic in pitch: on a linear axis
+    # everything anyone sings is crushed into the left fifth of the band and the
+    # rest is empty. win_size and averaging trade a little sharpness for bars
+    # that do not flicker frame to frame.
+    "freqs": (
+        "showfreqs=s={w}x{h}:mode={mode}:colors={colour}"
+        ":fscale=log:ascale=log:win_size=2048:averaging=3"
+    ),
+    # rate tied to the video's own frame rate so each frame holds exactly one
+    # frame's worth of audio. Left to itself showwaves accumulates a scrolling
+    # history, which starts empty — and starts empty again at every segment
+    # boundary, so the waveform kept sliding in from the right.
+    "waves": (
+        "showwaves=s={w}x{h}:mode=cline:colors={colour}:scale=sqrt:draw=full:r={fps}"
+    ),
     # showvolume's `c` is not a colour but an expression evaluated per channel,
     # so it rejects "#ffffff" outright — and the number it wants is packed
-    # AABBGGRR rather than the usual order.
-    "volume": "showvolume=w={w}:h={h}:c={packed}:b=0:f=0.6",
+    # AABBGGRR rather than the usual order. t and v turn off the channel names
+    # and the decibel readout, which belong on a mixing desk, not over lyrics.
+    # Segmented rather than one solid slab, which is what a meter looks like
+    # and what stops it reading as a grey rectangle behind the words.
+    "volume": "showvolume=w={w}:h={h}:c={packed}:b=1:f=0.6:t=0:v=0:s=3:o=h",
 }
 
 
@@ -65,9 +81,15 @@ def filter_chain(visualiser: Visualiser, output: Output) -> str | None:
         mode=visualiser.mode,
         colour=_hex(visualiser.colour),
         packed=_packed(visualiser.colour),
+        fps=f"{output.rate.numerator}/{output.rate.denominator}",
     )
     return (
         f"[1:a]{analysis},format=rgba,"
+        # Scaled to the box rather than trusted to come out at the size it was
+        # asked for: each of these filters lays itself out its own way — one
+        # stacks a row per channel, another leaves most of its canvas empty —
+        # so without this the band lands off-centre or over the edge.
+        f"scale={width}:{height},"
         f"colorchannelmixer=aa={visualiser.opacity:.3f},"
         # Padded onto a transparent frame-sized canvas, which is what puts it in
         # position and lets the words go on top of it rather than under.

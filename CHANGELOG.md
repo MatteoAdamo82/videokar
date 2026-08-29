@@ -162,6 +162,21 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- The visualiser landed off-centre, over an edge, or as a sliver, because the
+  size it was asked for was taken on trust. None of these filters come out at
+  that size: `showvolume` stacks a row per channel and adds a decibel readout,
+  `showfreqs` leaves most of its canvas empty. The analysis is scaled into its
+  box now, and a test renders each kind and fails if what is drawn falls outside
+  it.
+- The spectrum is drawn on a logarithmic frequency scale. On a linear one
+  everything anyone sings is crushed into the left fifth of the band and the
+  rest is empty, which is what it looked like.
+- The waveform slid in from the right at the start of every segment: left to
+  itself it accumulates a scrolling history that begins empty. Its rate is tied
+  to the video's, so each frame holds one frame of audio.
+- The level meter is segmented and has lost the channel names and the decibel
+  numbers, which belong on a mixing desk rather than over lyrics.
+
 - The level-meter visualiser was refused by ffmpeg outright. `showvolume`'s `c`
   is not a colour but an expression, so a colour was never a valid value for it,
   and the number it does take is packed AABBGGRR rather than in the usual order.
