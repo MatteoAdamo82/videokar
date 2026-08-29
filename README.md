@@ -149,9 +149,10 @@ wordings are matched up: a word still there keeps its timing, and only the ones
 that changed are fitted between their neighbours. Fixing a typo therefore costs
 nothing.
 
-A song can be taken out of the folder with the ✕ beside it. It moves to a
-`.trash` subfolder rather than being deleted — it is somebody's work, the button
-is one click, and the audio it names is left alone. Space plays, arrows
+A song can be taken out of the folder with the ✕ beside it, which turns the row
+into a question rather than opening a browser dialog. It moves to a `.trash`
+subfolder rather than being deleted — it is somebody's work, the button is one
+click, and the audio it names is left alone. Space plays, arrows
 scrub, clicking the waveform seeks.
 
 Every edit goes through the same operations `videokar fix` uses, so pinning and

@@ -71,6 +71,9 @@
   /* A real input rather than a contenteditable chip: focus, select-all, Enter
      and Escape all behave, and there is no editable node for a re-render to
      pull out from under the caret. */
+  .lineedit { position: fixed; z-index: 20; height: 32px; border-radius: 6px;
+              background: #1f2b3a; border: 1px solid #6f8bff; color: #fff;
+              font: 13px ui-sans-serif, sans-serif; padding: 0 8px; }
   .wordedit { position: fixed; z-index: 20; height: 44px; border-radius: 5px;
               background: #1f2b3a; border: 1px solid #5b6bd6; color: #fff;
               text-align: center; font: 12px ui-sans-serif, sans-serif; padding: 0 4px; }
@@ -109,6 +112,10 @@
   .item .discard { padding: 1px 7px; font-size: 12px; opacity: 0; }
   .item:hover .discard { opacity: 1; }
   .item .discard:hover { background: #4a2530; border-color: var(--bad); color: #ffd9df; }
+  .item .confirm { display: flex; gap: 6px; align-items: center; margin-left: 10px;
+                   color: var(--bad); white-space: nowrap; }
+  .item .confirm button { padding: 1px 8px; font-size: 11px; }
+  .item .confirm .yes { border-color: var(--bad); color: #ffd9df; }
   .job { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-top: 8px; }
   .bar { height: 5px; background: #14131c; border-radius: 3px; overflow: hidden; margin-top: 7px; }
   .bar i { display: block; height: 100%; background: #6f8bff; width: 0; transition: width .2s; }
@@ -441,14 +448,40 @@ function retype(el, word) {
 }
 
 function retypeLine(line) {
+  // A field on the page rather than window.prompt, for the same reason: a
+  // browser told to stop showing dialogs returns null from it without asking.
+  document.querySelectorAll(".lineedit").forEach((old) => old.remove());
   const current = line.words.map((w) => w.text).join(" ");
-  const typed = window.prompt(
-    `Line ${line.id} — retype it.\nWords that survive keep their timing; ` +
-    `new ones are fitted between their neighbours.`,
-    current,
-  );
-  if (typed === null || typed.trim() === current) return;
-  edit({op: "set_line_text", line: line.id, text: typed});
+  const block = linesEl.querySelector(`[data-line="${line.id}"]`);
+  const box = block ? block.getBoundingClientRect() : {left: 80, top: 120, width: 460};
+
+  const field = document.createElement("input");
+  field.className = "lineedit";
+  field.value = current;
+  Object.assign(field.style, {
+    left: Math.max(8, box.left) + "px",
+    top: Math.max(60, box.top - 34) + "px",
+    width: Math.max(320, box.width) + "px",
+  });
+  document.body.append(field);
+  field.focus();
+  field.select();
+
+  let done = false;
+  const finish = async (commit) => {
+    if (done) return;
+    done = true;
+    const typed = field.value.trim();
+    field.remove();
+    if (!commit || !typed || typed === current) return;
+    await edit({op: "set_line_text", line: line.id, text: typed});
+  };
+  field.onblur = () => finish(true);
+  field.onkeydown = (event) => {
+    event.stopPropagation();
+    if (event.key === "Enter") finish(true);
+    if (event.key === "Escape") finish(false);
+  };
 }
 
 // ---- dragging -------------------------------------------------------------
@@ -598,20 +631,30 @@ $("#library").onclick = async () => {
     <div id="jobs"></div>`);
 
   for (const button of sheet.querySelectorAll("#songlist .discard")) {
-    button.onclick = async (event) => {
+    button.onclick = (event) => {
       event.stopPropagation();
-      const title = button.dataset.title;
-      if (!window.confirm(
-        `Move "${title}" to .trash?\n\nThe file is not deleted — it goes into a ` +
-        `.trash folder beside the others, so it can be brought back.`)) return;
-      try {
-        await api("/api/discard", {
-          method: "POST", headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({path: button.dataset.path, media: false}),
-        });
-        sheetSay(`${title} moved to .trash`, "good");
-        $("#library").click();
-      } catch (err) { sheetSay(err.message, "bad"); }
+      // Asked in the row rather than through window.confirm: a browser that has
+      // been told to stop showing dialogs answers those silently, and the
+      // button then appears to do nothing at all.
+      const row = button.closest(".item");
+      if (row.querySelector(".confirm")) return;
+      const ask = document.createElement("span");
+      ask.className = "confirm";
+      ask.innerHTML = `<b>move to .trash?</b>
+        <button class="yes">move</button><button class="no">keep</button>`;
+      row.append(ask);
+      ask.querySelector(".no").onclick = (e) => { e.stopPropagation(); ask.remove(); };
+      ask.querySelector(".yes").onclick = async (e) => {
+        e.stopPropagation();
+        try {
+          await api("/api/discard", {
+            method: "POST", headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({path: button.dataset.path, media: false}),
+          });
+          sheetSay(`${button.dataset.title} moved to .trash — it can be brought back`, "good");
+          $("#library").click();
+        } catch (err) { sheetSay(err.message, "bad"); }
+      };
     };
   }
 

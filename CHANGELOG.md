@@ -162,6 +162,13 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- The ✕ beside a song did nothing, and so did double-clicking a line to retype
+  it. Both went through `window.confirm` and `window.prompt`, and a browser that
+  has been told to stop showing dialogs — one checkbox, and the prompt for
+  retyping a line is an easy way to end up ticking it — answers those silently
+  and immediately. Both now ask on the page: the row turns into a "move to
+  .trash? move / keep" question, and retyping a line opens a field over it.
+
 - Clicking Align with nothing chosen looked like it did nothing. It said so, in
   the status bar in the far corner of a window covered by the dialog being
   looked at. Anything a dialog has to say now appears inside it, under the
