@@ -105,6 +105,46 @@ class TextStyle:
     )
 
 
+_SHADOW_OFFSET = 0.07
+_SHADOW_BLUR = 0.06
+
+
+@dataclass(frozen=True)
+class Shadow:
+    """A drop shadow behind the words.
+
+    Off unless a colour is given. On a busy clip an outline thickens every
+    letter and starts to close up the counters at small sizes; a shadow lifts
+    the text off the picture without touching its shape, and the two can be
+    used together.
+    """
+
+    colour: RGBA | None = Field(
+        default=None, description="Empty draws no shadow. Alpha is part of it."
+    )
+    offset_x: float | None = Field(
+        default=None, ge=-200.0, le=200.0, description="Empty scales with the text."
+    )
+    offset_y: float | None = Field(
+        default=None, ge=-200.0, le=200.0, description="Empty scales with the text."
+    )
+    blur: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=100.0,
+        description="Softness in pixels. Empty scales with the text; 0 is a hard shadow.",
+    )
+
+
+def resolved_shadow(shadow: Shadow, size: int) -> tuple[float, float, float]:
+    """Offset and blur in pixels, sized against the text like everything else."""
+    return (
+        shadow.offset_x if shadow.offset_x is not None else round(size * _SHADOW_OFFSET, 1),
+        shadow.offset_y if shadow.offset_y is not None else round(size * _SHADOW_OFFSET, 1),
+        shadow.blur if shadow.blur is not None else round(size * _SHADOW_BLUR, 1),
+    )
+
+
 PAREN_SCALE = 0.72
 PAREN_OFF = (120, 120, 140, 255)
 PAREN_ON = (210, 200, 230, 255)
@@ -409,6 +449,7 @@ class Style:
         ),
     )
     ball: BallStyle = field(default_factory=BallStyle)
+    shadow: Shadow = field(default_factory=Shadow)
 
     def voice_style(self, voice: str) -> TextStyle:
         """The text style for a voice, with the second voice's overrides applied.

@@ -97,6 +97,8 @@
               color: var(--dim); margin: 22px 0 8px; }
   .sheet p { color: var(--dim); margin: 4px 0 0; }
   .sheet label { display: block; color: var(--dim); margin: 10px 0 4px; }
+  .sheet input[type=color] { width: 100%; height: 34px; background: #14131c;
+                             border: 1px solid #3a3750; border-radius: 7px; padding: 2px; }
   .sheet input[type=file], .sheet textarea, .sheet select, .sheet input[type=text] {
     width: 100%; background: #14131c; color: var(--ink); border: 1px solid #3a3750;
     border-radius: 7px; padding: 8px 10px; font: inherit; }
@@ -721,6 +723,7 @@ $("#export").onclick = async () => {
     paren: saved.overrides.paren || {},
     output: saved.overrides.output || {},
     main: saved.overrides.main || {},
+    shadow: saved.overrides.shadow || {},
   };
   const marginPct = was.layout.margin_y != null
     ? Math.round(was.layout.margin_y * 100 / presetHeight(was.preset))
@@ -746,6 +749,18 @@ $("#export").onclick = async () => {
         <input type="range" id="expsize" min="50" max="250"
                value="${Math.round((was.main.size ? was.main.size / defaultSize(was.preset) : 1) * 100)}">
       </label>
+      <label>sung<input type="color" id="expon" value="${hexOf(was.main.colour_on, "#ffeebe")}"></label>
+      <label>not yet sung<input type="color" id="expoff" value="${hexOf(was.main.colour_off, "#9695b4")}"></label>
+      <label>outline — <b id="expoutout">3px</b>
+        <input type="range" id="expout" min="0" max="12"
+               value="${was.main.outline_width ?? 3}">
+      </label>
+      <label>outline colour<input type="color" id="expoutcol" value="${hexOf(was.main.outline, "#000000")}"></label>
+      <label>shadow<select id="expshadow">
+        <option value="" ${was.shadow.colour ? "" : "selected"}>none</option>
+        <option value="on" ${was.shadow.colour ? "selected" : ""}>on</option>
+      </select></label>
+      <label>shadow colour<input type="color" id="expshadowcol" value="${hexOf(was.shadow.colour, "#000000")}"></label>
       <label>font<select id="expfont">
         <option value="">the system sans</option>
         ${fonts.map((f) =>
@@ -807,6 +822,11 @@ $("#export").onclick = async () => {
     squash: Number($("#expsquash").value) / 100,
     font: $("#expfont").value,
     size_scale: Number($("#expsize").value) / 100,
+    colour_on: $("#expon").value,
+    colour_off: $("#expoff").value,
+    outline_width: Number($("#expout").value),
+    outline: $("#expoutcol").value,
+    shadow: $("#expshadow").value ? $("#expshadowcol").value : null,
   });
 
   let previewTimer = null;
@@ -821,6 +841,7 @@ $("#export").onclick = async () => {
     $("#expspriteout").textContent = `${s.sprite_scale.toFixed(1)}×`;
     $("#expsquashout").textContent = s.squash ? s.squash.toFixed(2) : "off";
     $("#expsizeout").textContent = `${s.size_scale.toFixed(2)}×`;
+    $("#expoutout").textContent = s.outline_width ? `${s.outline_width}px` : "none";
   };
 
   const drawPreview = () => {
@@ -840,13 +861,15 @@ $("#export").onclick = async () => {
     if (s.squash) query.set("squash", s.squash);
     if (s.font) query.set("font", s.font);
     query.set("font_size", Math.round(defaultSize(s.preset) * s.size_scale));
+    query.set("extra", JSON.stringify(lookOf(s)));
     const image = $("#preview");
     image.onerror = () =>
       say("the preview could not be drawn — check the status line above", "bad");
     image.src = "/api/frame?" + query;
   };
   for (const id of ["expreset", "expanchor", "expmargin", "expparen", "expsprite",
-                    "expspritescale", "expsquash", "expsize", "expfont"]) {
+                    "expspritescale", "expsquash", "expsize", "expfont", "expon", "expoff",
+                    "expout", "expoutcol", "expshadow", "expshadowcol"]) {
     $("#" + id).oninput = refresh;
   }
   refresh();
@@ -893,6 +916,18 @@ $("#export").onclick = async () => {
     }
   };
 
+  // Alpha is not something a colour input can express, so it is carried here:
+  // an outline and a shadow both want to sit under full opacity.
+  const lookOf = (s) => ({
+    main: {
+      colour_on: s.colour_on,
+      colour_off: s.colour_off,
+      outline: s.outline_width ? s.outline + "d2" : null,
+      outline_width: s.outline_width,
+    },
+    shadow: {colour: s.shadow ? s.shadow + "c8" : null},
+  });
+
   const overridesFrom = (s, fps) => ({
     output: {
       audio: $("#expaudio").checked,
@@ -903,9 +938,11 @@ $("#export").onclick = async () => {
       margin_y: Math.round(presetHeight(s.preset) * s.margin_pct / 100),
     },
     main: {
+      ...lookOf(s).main,
       size: Math.round(defaultSize(s.preset) * s.size_scale),
       ...(s.font ? {font: s.font} : {}),
     },
+    shadow: lookOf(s).shadow,
     paren: {scale: s.paren_scale},
     ball: {
       squash: s.squash,
@@ -951,6 +988,11 @@ const PRESET_HEIGHT = {alpha: 1080, youtube: 1080, minimal: 1080, shorts: 1920};
 const presetHeight = (name) => PRESET_HEIGHT[name] || 1080;
 // The size the renderer would pick on its own, so the control is a multiple of
 // what a preset already looks right at rather than a bare pixel count.
+// A colour input speaks "#rrggbb" only, so any alpha the file carries is
+// dropped for the swatch and put back when the choice is sent.
+const hexOf = (value, fallback) =>
+  typeof value === "string" && value.startsWith("#") ? value.slice(0, 7) : fallback;
+
 const defaultSize = (name) => Math.max(12, Math.round(presetHeight(name) / 17));
 
 function previewTime() {

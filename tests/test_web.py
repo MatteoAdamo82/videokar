@@ -648,3 +648,54 @@ def test_retyping_a_line_through_the_api(client):
     )
     assert response.status_code == 200
     assert load_song(client.song_path).line("l1").words_text == "d e f g"
+
+
+def test_the_preview_takes_the_same_overrides_as_a_render(client):
+    import json
+
+    plain = client.get("/api/frame", params={"at": 20.5}).content
+    styled = client.get(
+        "/api/frame",
+        params={
+            "at": 20.5,
+            "extra": json.dumps(
+                {"main": {"colour_on": "#ff0000"}, "shadow": {"colour": "#000000c8"}}
+            ),
+        },
+    ).content
+    assert plain != styled
+
+
+def test_a_preview_override_that_is_not_json_says_so(client):
+    response = client.get("/api/frame", params={"at": 20.5, "extra": "{nope"})
+    assert response.status_code == 422
+    assert "not JSON" in response.json()["detail"]
+
+
+def test_a_preview_override_the_schema_refuses_says_so(client):
+    import json
+
+    response = client.get(
+        "/api/frame",
+        params={"at": 20.5, "extra": json.dumps({"main": {"colour_on": "burnt sienna"}})},
+    )
+    assert response.status_code == 422
+
+
+def test_the_colours_and_the_shadow_are_remembered(client, tmp_path):
+    from videokar.config import resolve_style
+
+    client.post(
+        "/api/style",
+        json={
+            "preset": "alpha",
+            "overrides": {
+                "main": {"colour_on": "#9be7c4", "outline": "#000000d2", "outline_width": 5},
+                "shadow": {"colour": "#000000c8"},
+            },
+        },
+    )
+    style = resolve_style(tmp_path / "videokar.toml")
+    assert style.main.colour_on == (155, 231, 196, 255)
+    assert style.main.outline_width == 5
+    assert style.shadow.colour == (0, 0, 0, 200)

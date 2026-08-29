@@ -14,6 +14,7 @@ authentication, so it is not something to expose.
 from __future__ import annotations
 
 import io
+import json
 import logging
 from pathlib import Path
 from typing import Any
@@ -522,6 +523,7 @@ def create_app(
         squash: float | None = None,
         font: str | None = None,
         font_size: int | None = None,
+        extra: str | None = None,
     ) -> Any:
         """One frame, small, so a setting can be judged before a render.
 
@@ -531,6 +533,17 @@ def create_app(
         path = current()
         song = load_song(path)
         overrides: dict[str, Any] = {"layout": {}, "paren": {}}
+        if extra:
+            # The same shape the render takes, merged in first, so a new control
+            # on the page does not mean another parameter here every time.
+            try:
+                more = json.loads(extra)
+            except json.JSONDecodeError as exc:
+                raise HTTPException(422, f"extra is not JSON: {exc}") from exc
+            if not isinstance(more, dict):
+                raise HTTPException(422, "extra must be an object")
+            for section, values in more.items():
+                overrides[section] = {**overrides.get(section, {}), **(values or {})}
         if anchor is not None:
             overrides["layout"]["anchor"] = anchor
         if margin_y is not None:

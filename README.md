@@ -313,6 +313,27 @@ time is a vertical twitch. Words closer together than `min_bounce` share one
 bounce, landing over the middle of the group, so every hop lasts long enough to
 read as a bounce.
 
+**Colour, outline and shadow are in the export dialog**, because on a busy clip
+the words that have not been sung yet are the first thing to disappear. An
+outline thickens every letter and starts closing up the counters at small sizes;
+a shadow lifts the text off the picture without touching its shape. They work
+together, and both are off or on independently.
+
+```toml
+[main]
+colour_on = "#ffeebe"
+colour_off = "#9695b4"
+outline = "#000000d2"
+outline_width = 3
+
+[shadow]
+colour = "#000000c8"   # empty draws none
+```
+
+The shadow is drawn once per line rather than once per frame — its shape does
+not change while the line is up, only the colour of the words above it — which
+costs a millisecond a frame instead of a blur every time.
+
 **Text is one size for the whole video.** A line too wide for the frame wraps
 onto two rows rather than being drawn smaller than the line before it. If you
 would rather it shrank, `--min-scale 0.7` allows that explicitly. The second

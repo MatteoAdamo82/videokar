@@ -10,9 +10,9 @@ from __future__ import annotations
 from bisect import bisect_right
 from dataclasses import dataclass
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 
-from ..config.schema import RGBA, Ball, Style, resolved_ball
+from ..config.schema import RGBA, Ball, Shadow, Style, resolved_ball, resolved_shadow
 from ..project.model import Line, Song
 from .ball import ball_position
 from .circle import draw_ball
@@ -41,6 +41,11 @@ class Cue:
     leaves: float
     ball: Ball | None = None
     """The ball, with its dimensions settled against this line's text size."""
+
+    shadow: Image.Image | None = None
+    """The line's shadow, drawn once. Its shape does not change while the line
+    is on screen — only the colour of the words above it does — so blurring it
+    per frame would be the same work four thousand times over."""
 
     fade_in: float = 0.0
     fade_out: float = 0.0
@@ -110,6 +115,7 @@ class FrameRenderer:
                     appears=appears,
                     leaves=leaves,
                     ball=resolved_ball(self.style.ball, layout.size),
+                    shadow=self._shadow_for(layout),
                     # Only fade in the room that is not being sung through.
                     fade_in=min(timing.fade, max(0.0, line.start - appears)),
                     fade_out=min(timing.fade, max(0.0, leaves - line.end)),
@@ -117,6 +123,26 @@ class FrameRenderer:
             )
             previous_leaves = leaves
         return cues
+
+    def _shadow_for(self, layout: LineLayout) -> Image.Image | None:
+        """Draw this line's shadow once, to be pasted under every frame of it."""
+        shadow: Shadow = self.style.shadow
+        if shadow.colour is None:
+            return None
+        offset_x, offset_y, blur = resolved_shadow(shadow, layout.size)
+        output = self.style.output
+        image = Image.new("RGBA", (output.width, output.height), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(image)
+        for placed in layout.words:
+            draw.text(
+                (placed.x + offset_x, placed.y + offset_y),
+                placed.text,
+                font=layout.font,
+                fill=shadow.colour,
+            )
+        if blur > 0:
+            image = image.filter(ImageFilter.GaussianBlur(blur))
+        return image
 
     def cue_at(self, time: float) -> Cue | None:
         index = bisect_right(self._starts, time) - 1
@@ -135,6 +161,13 @@ class FrameRenderer:
         draw = ImageDraw.Draw(image)
         opacity = cue.opacity(time)
         text_style = cue.layout.style
+
+        if cue.shadow is not None:
+            layer = cue.shadow
+            if opacity < 1.0:
+                layer = layer.copy()
+                layer.putalpha(layer.getchannel("A").point(lambda v: int(v * opacity)))
+            image.alpha_composite(layer)
 
         for placed in cue.layout.words:
             word = placed.word

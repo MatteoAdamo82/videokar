@@ -161,6 +161,14 @@ All notable changes to this project are documented here. The format follows
   15% of each other. ProRes stays the default, being what an editor is
   tuned for.
 
+- A drop shadow behind the words, off unless given a colour, with its offset and
+  softness scaled to the text like everything else. Drawn once per line rather
+  than once per frame, since its shape does not change while the line is up —
+  a millisecond a frame instead of a blur every time.
+- Text colours, outline and shadow are in the export dialog, with the live
+  preview. `/api/frame` takes the same overrides a render does, so a control can
+  be added to the page without the endpoint growing another parameter.
+
 ### Removed
 
 - The music visualiser. It never looked good enough to keep — the spectrum, the

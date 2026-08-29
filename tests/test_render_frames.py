@@ -167,3 +167,56 @@ def test_a_small_frame_still_fits_the_line_on_one_row():
     lines = song(make_line("l0", words, 10.0))
     style = Style(output=Output(width=320, height=180), main=TextStyle(outline=None))
     assert FrameRenderer(lines, style).cues[0].layout.rows == 1
+
+
+def test_no_shadow_unless_a_colour_is_given():
+    from videokar.config.schema import Shadow
+
+    assert Style().shadow.colour is None
+    renderer = FrameRenderer(two_lines(), STYLE)
+    assert renderer.cues[0].shadow is None
+    assert FrameRenderer(two_lines(), replace(STYLE, shadow=Shadow())).cues[0].shadow is None
+
+
+def test_a_shadow_is_drawn_behind_the_words():
+    from videokar.config.schema import Shadow
+
+    plain = FrameRenderer(two_lines(), STYLE).frame(10.5)
+    shadowed = FrameRenderer(
+        two_lines(), replace(STYLE, shadow=Shadow(colour=(0, 0, 0, 200)))
+    ).frame(10.5)
+    assert plain.tobytes() != shadowed.tobytes()
+    # It covers more of the frame than the letters alone.
+    assert shadowed.getbbox()[3] - shadowed.getbbox()[1] >= plain.getbbox()[3] - plain.getbbox()[1]
+
+
+def test_the_shadow_is_drawn_once_per_line_not_once_per_frame():
+    from videokar.config.schema import Shadow
+
+    # Its shape does not change while a line is up — only the colour of the
+    # words above it does — so blurring it per frame would be the same work
+    # thousands of times over.
+    renderer = FrameRenderer(two_lines(), replace(STYLE, shadow=Shadow(colour=(0, 0, 0, 200))))
+    cue = renderer.cues[0]
+    assert cue.shadow is not None
+    assert renderer.cue_at(10.5).shadow is cue.shadow
+    assert renderer.cue_at(11.2).shadow is cue.shadow
+
+
+def test_the_shadow_fades_with_the_line():
+    from videokar.config.schema import Shadow
+
+    renderer = FrameRenderer(two_lines(), replace(STYLE, shadow=Shadow(colour=(0, 0, 0, 255))))
+    cue = renderer.cues[0]
+    entering = renderer.frame(cue.appears + 0.01)
+    settled = renderer.frame(cue.line.start)
+    assert entering.tobytes() != settled.tobytes()
+
+
+def test_the_shadow_is_offset_from_the_text():
+    from videokar.config.schema import Shadow, resolved_shadow
+
+    offset_x, offset_y, blur = resolved_shadow(Shadow(), 64)
+    assert offset_x > 0 and offset_y > 0 and blur > 0
+    # And explicit values win, including a hard shadow.
+    assert resolved_shadow(Shadow(offset_x=2, offset_y=-3, blur=0), 64) == (2, -3, 0)
