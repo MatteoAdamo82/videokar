@@ -146,11 +146,6 @@ All notable changes to this project are documented here. The format follows
   checked without being aligned again — the attacks are computed from the audio
   and cached.
 
-- An optional band reacting to the music, drawn under the words: spectrum,
-  waveform or level meter, positioned and sized as fractions of the frame.
-  ffmpeg does the analysis and videokar composites it in the same pass as the
-  lyrics, so it costs no second render and cannot drift out of step. Off unless
-  asked for, from `--visualiser`, the config file, or the export dialog.
 
 - A whole line can be retyped, from `videokar fix text` or by double-clicking
   the line in the view. Words that survive the change keep their timing — old
@@ -162,40 +157,21 @@ All notable changes to this project are documented here. The format follows
 
 - Two more overlay formats, both lossless and both carrying alpha: `animation`
   (QuickTime RLE) and `png_mov`. Measured on a four-minute 1080p overlay with a
-  visualiser, ProRes came to 2.49 GB against 1.02 GB and 0.19 GB, decoding
-  within 15% of each other. ProRes stays the default, being what an editor is
+  overlay, ProRes came to 0.94 GB against 0.15 GB and 0.26 GB, decoding within
+  15% of each other. ProRes stays the default, being what an editor is
   tuned for.
+
+### Removed
+
+- The music visualiser. It never looked good enough to keep — the spectrum, the
+  waveform and the level meter each needed their own coaxing and none of them
+  earned their place over the words. ffmpeg draws them well enough on its own
+  for anyone who wants one, composited in an editor, which is where it started.
 
 ### Fixed
 
-- The visualiser landed off-centre, over an edge, or as a sliver, because the
-  size it was asked for was taken on trust. None of these filters come out at
-  that size: `showvolume` stacks a row per channel and adds a decibel readout,
-  `showfreqs` leaves most of its canvas empty. The analysis is scaled into its
-  box now, and a test renders each kind and fails if what is drawn falls outside
-  it.
-- The spectrum is drawn on a logarithmic frequency scale. On a linear one
-  everything anyone sings is crushed into the left fifth of the band and the
-  rest is empty, which is what it looked like.
-- The waveform slid in from the right at the start of every segment: left to
-  itself it accumulates a scrolling history that begins empty. Its rate is tied
-  to the video's, so each frame holds one frame of audio.
-- The level meter is segmented and has lost the channel names and the decibel
-  numbers, which belong on a mixing desk rather than over lyrics.
 
-- The level-meter visualiser was refused by ffmpeg outright. `showvolume`'s `c`
-  is not a colour but an expression, so a colour was never a valid value for it,
-  and the number it does take is packed AABBGGRR rather than in the usual order.
-  Every kind is now run through ffmpeg by a test rather than only being built as
-  a string, which is how this survived: the string was well-formed and nobody
-  had ever asked ffmpeg what it thought of it.
 
-- With the visualiser on, the words froze on whichever line the first segment
-  ended on and stayed there for the rest of the video, while the band carried on
-  moving. The overlay's base is the analysis, which runs to the end of the song,
-  and the frames handed to it are one segment long — so the output lasted as
-  long as the audio and the last frame it had been given was repeated to fill
-  it. The overlay now ends with the frames.
 
 - The ✕ beside a song did nothing, and so did double-clicking a line to retype
   it. Both went through `window.confirm` and `window.prompt`, and a browser that

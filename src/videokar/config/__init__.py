@@ -8,7 +8,6 @@ from .schema import (
     Style,
     TextStyle,
     Timing,
-    Visualiser,
     VoiceStyle,
 )
 from .writer import to_partial_toml, to_toml
@@ -21,7 +20,6 @@ __all__ = [
     "Style",
     "TextStyle",
     "Timing",
-    "Visualiser",
     "VoiceStyle",
     "available_presets",
     "resolve_style",

@@ -209,28 +209,16 @@ videokar render song.json -o overlay.mov
 | --- | --- |
 | `prores4444` (default) | `.mov` with alpha — what an editor expects, and enormous |
 | `png_mov` | `.mov` with alpha, lossless, a fraction of the size |
-| `animation` | `.mov` with alpha, lossless, smallest when there is no visualiser |
+| `animation` | `.mov` with alpha, lossless, smaller still on flat lyrics |
 | `mp4` | H.264 on an opaque background, audio muxed in |
 | `png` | numbered frames with alpha, for anything else |
 
 ProRes 4444 is a mastering codec: at 1080p25 it costs around 90 Mbit/s whatever
 you put in it, and flat colour over a transparent field is the worst case for an
-intra-frame DCT codec. Fine detail makes it worse — the same four-minute overlay
-measured 0.94 GB with only lyrics and 2.7 GB with a level meter behind them,
-because a segmented meter is hundreds of thin vertical lines.
-
-The other two are lossless and carry alpha just as well. Measured on the same
-four-minute 1080p overlay with a visualiser, and decoding within 15% of each
-other:
-
-| | lyrics only | with a level meter |
-| --- | --- | --- |
-| `prores4444` | 0.94 GB | 2.49 GB |
-| `animation` | 0.15 GB | 1.02 GB |
-| `png_mov` | 0.26 GB | **0.19 GB** |
-
-`animation` wins on plain lyrics, `png_mov` on anything busy. Both open in Final
-Cut. ProRes remains the default because it is what an editor is tuned for.
+intra-frame DCT codec. The other two are lossless and carry alpha just as well —
+the same four-minute 1080p overlay came to 0.94 GB as ProRes and 0.15 GB as
+animation, decoding no slower. ProRes stays the default because it is what an
+editor is tuned for.
 
 **Render at your editing timeline's frame rate.** A clip at a rate the project
 does not use gets conformed, and a conform reads exactly like the overlay
@@ -247,32 +235,6 @@ Long renders go out in segments and are concatenated with a stream copy, so a
 three minute track never depends on one ffmpeg process staying alive for three
 minutes. Frame times come from the absolute frame index rather than accumulating
 per segment, so a seam cannot drift the timing.
-
-## A band reacting to the music
-
-Optional, and off unless asked for.
-
-```bash
-videokar render song.json --visualiser freqs
-```
-
-```toml
-[visualiser]
-kind = "freqs"      # none · freqs (spectrum) · waves · volume
-anchor = "bottom"
-height = 0.18       # fraction of the frame
-opacity = 0.55
-```
-
-ffmpeg does the analysis — those filters have had twenty years of work put into
-them and there is no reason to write another FFT here. What videokar decides is
-where the band goes and that it ends up **under** the words: the obvious filter
-chain overlays the analysis onto the karaoke frames, which puts a spectrum on
-top of the lyrics. Instead the analysis is padded onto a transparent
-frame-sized canvas and the words are laid over it, in the same pass, so it costs
-no second render and cannot drift.
-
-It needs the audio to react to, even when the result is a silent overlay.
 
 ## Configuration
 

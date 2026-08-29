@@ -51,11 +51,10 @@ CODECS: dict[str, Codec] = {
         suffix=".mp4",
         keeps_alpha=False,
     ),
-    # Both lossless, both carry alpha, and both are a fraction of the size for
-    # this kind of picture — flat colour over a transparent field is the worst
-    # case for an intra-frame DCT codec and the best case for these. Animation
-    # wins on plain lyrics, PNG on anything with a visualiser in it, and neither
-    # decodes appreciably slower than ProRes.
+    # Both lossless, both carry alpha, and both a fraction of the size for this
+    # kind of picture — flat colour over a transparent field is the worst case
+    # for an intra-frame DCT codec and the best case for these. Neither decodes
+    # appreciably slower than ProRes, which was the thing worth checking.
     "animation": Codec(
         args=["-c:v", "qtrle", "-pix_fmt", "argb"], suffix=".mov", keeps_alpha=True
     ),
@@ -81,19 +80,11 @@ def render_frames(
     audio_path: Path | None = None,
     audio_offset: float = 0.0,
     mux_audio: bool = True,
-    visualiser: str | None = None,
 ) -> Path:
-    """Pipe frames into one ffmpeg process and write a single file.
-
-    `visualiser` is a filter_complex taking the frames as input 0 and the audio
-    as input 1 and producing `[out]`. It needs the audio even when the audio is
-    not being kept, which is why those are two separate decisions.
-    """
+    """Pipe frames into one ffmpeg process and write a single file."""
     require_ffmpeg()
     codec = CODECS[output.format]
     keep_alpha = codec.keeps_alpha and output.background[3] < 255
-    if visualiser and audio_path is None:
-        raise EncodeError("the visualiser needs the audio to react to")
 
     command = [
         "ffmpeg", "-y", "-loglevel", "error",
@@ -104,9 +95,7 @@ def render_frames(
     ]  # fmt: skip
     if audio_path is not None:
         command += ["-ss", f"{audio_offset:.3f}", "-i", str(audio_path)]
-    if visualiser:
-        command += ["-filter_complex", visualiser, "-map", "[out]"]
-    elif audio_path is not None and mux_audio:
+    if audio_path is not None and mux_audio:
         command += ["-map", "0:v:0"]
     command += codec.args
     if audio_path is not None and mux_audio:
@@ -179,7 +168,6 @@ def render_segmented(
     start: float,
     end: float,
     audio_path: Path | None = None,
-    visualiser: str | None = None,
     on_segment: Callable[[int, int], None] | None = None,
 ) -> Path:
     """Render [start, end) in segments and concatenate them.
@@ -206,7 +194,6 @@ def render_segmented(
             output,
             audio_path=audio_path,
             audio_offset=start,
-            visualiser=visualiser,
         )
 
     with TemporaryDirectory(prefix="videokar-segments-") as workdir:
@@ -220,18 +207,8 @@ def render_segmented(
             )
             # Audio is muxed once, onto the concatenated result: a per-segment
             # mux would re-encode the same audio a dozen times and put an AAC
-            # priming delay at every seam. The visualiser still needs it here,
-            # seeked to this segment, since compositing afterwards would mean
-            # re-encoding the whole video.
-            render_frames(
-                frames,
-                part,
-                output,
-                audio_path=audio_path if visualiser else None,
-                audio_offset=segment_start / rate,
-                mux_audio=False,
-                visualiser=visualiser,
-            )
+            # priming delay at every seam.
+            render_frames(frames, part, output)
             parts.append(part)
             if on_segment:
                 on_segment(number, len(boundaries))

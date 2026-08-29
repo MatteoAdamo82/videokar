@@ -194,44 +194,6 @@ class BallStyle:
     )
 
 
-VisualiserKind = Literal["none", "freqs", "waves", "volume"]
-FreqMode = Literal["bar", "line", "dot"]
-
-
-@dataclass(frozen=True)
-class Visualiser:
-    """A band reacting to the music, drawn under the words.
-
-    ffmpeg does the analysis — it has spent twenty years on those filters and
-    there is no reason to write another FFT here. What this holds is where the
-    band goes and what it looks like.
-    """
-
-    kind: VisualiserKind = Field(
-        default="none",
-        description=(
-            "'freqs' is the spectrum analyser, 'waves' the waveform, 'volume' a "
-            "level meter. 'none' draws nothing."
-        ),
-    )
-    mode: FreqMode = Field(default="bar", description="How 'freqs' is drawn.")
-    width: float = Field(
-        default=0.9, gt=0.0, le=1.0, description="Fraction of the frame width."
-    )
-    height: float = Field(
-        default=0.18, gt=0.0, le=1.0, description="Fraction of the frame height."
-    )
-    anchor: Anchor = "bottom"
-    margin: float = Field(
-        default=0.03, ge=0.0, lt=0.5, description="From that edge, as a fraction."
-    )
-    colour: RGBA = (255, 255, 255, 255)
-    opacity: float = Field(
-        default=0.55,
-        gt=0.0,
-        le=1.0,
-        description="Kept under 1 by default: it sits behind the words, not in front.",
-    )
 
 
 @dataclass(frozen=True)
@@ -304,11 +266,10 @@ class Output:
         default="prores4444",
         description=(
             "prores4444 is what an editor expects and what it is tuned for. "
-            "animation and png_mov are lossless with alpha too and far smaller — "
-            "measured on a four-minute 1080p overlay, 0.94 GB of ProRes against "
-            "0.15 GB of animation, and with a busy visualiser 2.7 GB against "
-            "0.3 GB of png_mov — at the same decode speed. png is a numbered "
-            "sequence rather than a file."
+            "animation and png_mov are lossless and carry alpha too, at a "
+            "fraction of the size and the same decode speed — measured on a "
+            "four-minute 1080p overlay, 0.94 GB against 0.15 GB. png is a "
+            "numbered sequence rather than a file."
         ),
     )
     background: RGBA = Field(
@@ -448,7 +409,6 @@ class Style:
         ),
     )
     ball: BallStyle = field(default_factory=BallStyle)
-    visualiser: Visualiser = field(default_factory=Visualiser)
 
     def voice_style(self, voice: str) -> TextStyle:
         """The text style for a voice, with the second voice's overrides applied.
