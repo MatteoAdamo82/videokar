@@ -448,6 +448,7 @@ def create_app(
 
         from ..render import CODECS, FrameRenderer  # noqa: PLC0415
         from ..render.encode import render_segmented  # noqa: PLC0415
+        from ..render.visualiser import filter_chain  # noqa: PLC0415
 
         if style.output.format == "png":
             raise HTTPException(422, "a PNG sequence is not something to hand back over HTTP")
@@ -456,7 +457,11 @@ def create_app(
             session.workdir, path.stem, suffix, session.reserved
         )
         session.reserved.add(destination.name)
-        found = audio_of(path) if style.output.audio else None
+        chain = filter_chain(style.visualiser, style.output)
+        # The visualiser needs the audio even when the result is to be silent.
+        found = audio_of(path) if (style.output.audio or chain) else None
+        if chain and found is None:
+            raise HTTPException(422, "the visualiser needs the audio, which was not found")
 
         def work(job):
             renderer = FrameRenderer(song, style)
@@ -470,6 +475,7 @@ def create_app(
                 start=0.0,
                 end=song.audio.duration,
                 audio_path=found,
+                visualiser=chain,
                 on_segment=lambda done, count: job.update(
                     message=f"segment {done} of {count}", progress=done / count
                 ),

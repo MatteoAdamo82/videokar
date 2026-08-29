@@ -146,6 +146,12 @@ All notable changes to this project are documented here. The format follows
   checked without being aligned again — the attacks are computed from the audio
   and cached.
 
+- An optional band reacting to the music, drawn under the words: spectrum,
+  waveform or level meter, positioned and sized as fractions of the frame.
+  ffmpeg does the analysis and videokar composites it in the same pass as the
+  lyrics, so it costs no second render and cannot drift out of step. Off unless
+  asked for, from `--visualiser`, the config file, or the export dialog.
+
 ### Fixed
 
 - Every export overwrote the same filename, so a copy downloaded earlier could

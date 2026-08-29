@@ -213,6 +213,32 @@ three minute track never depends on one ffmpeg process staying alive for three
 minutes. Frame times come from the absolute frame index rather than accumulating
 per segment, so a seam cannot drift the timing.
 
+## A band reacting to the music
+
+Optional, and off unless asked for.
+
+```bash
+videokar render song.json --visualiser freqs
+```
+
+```toml
+[visualiser]
+kind = "freqs"      # none · freqs (spectrum) · waves · volume
+anchor = "bottom"
+height = 0.18       # fraction of the frame
+opacity = 0.55
+```
+
+ffmpeg does the analysis — those filters have had twenty years of work put into
+them and there is no reason to write another FFT here. What videokar decides is
+where the band goes and that it ends up **under** the words: the obvious filter
+chain overlays the analysis onto the karaoke frames, which puts a spectrum on
+top of the lyrics. Instead the analysis is padded onto a transparent
+frame-sized canvas and the words are laid over it, in the same pass, so it costs
+no second render and cannot drift.
+
+It needs the audio to react to, even when the result is a silent overlay.
+
 ## Configuration
 
 ```bash
