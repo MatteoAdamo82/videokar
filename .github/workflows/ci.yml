@@ -1,0 +1,66 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A push that lands while the previous one is still running makes the older
+# answer worthless, not more informative.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Developed on Apple Silicon, so macOS is where it is actually used;
+        # Linux is where anyone else will first try it.
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # The encoder is a program on PATH, and the tests that drive it skip
+      # themselves when it is missing — which would quietly leave the whole
+      # encoding side untested.
+      - name: ffmpeg (linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: ffmpeg (macos)
+        if: runner.os == 'macOS'
+        run: brew install ffmpeg
+
+      # The web extra, but not the align one: torch and demucs are gigabytes,
+      # and the only tests that need them are the integration ones, which also
+      # need the author's own audio and are not run here.
+      - name: install
+        run: uv sync --extra web --group dev
+
+      - name: ruff
+        run: uv run ruff check .
+
+      # Nothing in this set is allowed to skip. A test that quietly stopped
+      # running is worse than one that fails, and every skip in this project is
+      # conditional on something — ffmpeg, the web extra — that is installed
+      # above precisely so it does not skip.
+      - name: tests
+        run: |
+          set -o pipefail
+          uv run pytest -q -rs -m "not integration" | tee report.txt
+          if grep -q SKIPPED report.txt; then
+            echo "::error::nothing in this set should skip"
+            grep SKIPPED report.txt
+            exit 1
+          fi
+
+      # Catches a packaging mistake here rather than at the point someone tries
+      # to install it.
+      - name: build
+        run: uv build

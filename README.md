@@ -1,5 +1,7 @@
 # videokar
 
+[![ci](https://github.com/matteoadamo/videokar/actions/workflows/ci.yml/badge.svg)](https://github.com/matteoadamo/videokar/actions/workflows/ci.yml)
+
 Bouncing-ball karaoke lyric videos from an audio track and its lyrics.
 
 Built for lyric videos of AI-generated songs (Suno and friends): feed it the
@@ -116,11 +118,20 @@ with progress, and the document opens when it lands. **Export** renders the
 video, transparent ProRes 4444 by default, and offers it as a download when it
 is done — with **a live preview frame** above the controls, because choosing
 where the words sit and then waiting three minutes to see it is not a way anyone
-can work. Position, distance from the edge and the second voice's size are all
-there; the margin is given as a percentage of the frame, so the same choice
-holds at any resolution, and it goes up to 70% — past the middle, if that is
-where the words belong. A margin larger than the frame is held inside it rather
-than pushing the words out of the picture.
+can work.
+
+The controls are grouped into four tabs — **Text**, **Position**, **The ball**,
+**The file** — with the preview above them, staying put: every one of these
+settings is a question about how that frame looks, so losing sight of it to
+change one would be the wrong way round. Inside a tab, what does not apply is
+hidden rather than greyed: a PNG's size means nothing while a circle is
+bouncing.
+
+Position, distance from the edge and the second voice's size are under
+**Position** and **Text**; the margin is given as a percentage of the frame, so
+the same choice holds at any resolution, and it goes up to 70% — past the
+middle, if that is where the words belong. A margin larger than the frame is
+held inside it rather than pushing the words out of the picture.
 
 **Type and size are in the dialog too.** It lists every font this machine can
 draw with — scanned rather than guessed, about 365 of them here, with Apple's
@@ -128,6 +139,12 @@ internal fallback faces left out — and takes a `.ttf`, `.otf` or `.ttc` droppe
 in. Size is a multiple of what the preset already looks right at, so it survives
 changing resolution. A font in the working folder wins over the system's copy of
 the same family, since that is the one you put there on purpose.
+
+**The ball tab decides what bounces**: a circle, a PNG of your own, or nothing
+at all. The circle has a colour and a size — a multiple of what it would have
+been, which is a quarter of the text height, so the choice still holds when the
+text size or the preset changes. Choosing the circle again after a PNG takes
+the PNG out of `videokar.toml` rather than leaving it there to be ignored.
 
 **The dialog remembers.** Rendering writes the choices to `videokar.toml` in the
 working folder and the dialog restores them next time — from the folder, not
@@ -294,7 +311,11 @@ videokar render song.json --sprite paw.png --sprite-scale 2
 ```
 
 `assets/sprites/cotton.png` is there to try it with. In the sync view, the
-export dialog lists the PNGs in the folder and takes new ones.
+export dialog lists the PNGs in the folder and takes new ones — and picking the
+circle again puts the sprite back down.
+
+The circle has settings of its own: `[ball] colour` and `radius`, both in the
+dialog. `kind = "none"` draws nothing at all, for when the words are enough.
 
 ```bash
 videokar sprite paw.png --scale 3
@@ -436,8 +457,30 @@ tests, or they skip.
 ## Development
 
 ```bash
+uv sync --extra web --group dev
 uv run pytest
-uv run ruff check
+uv run ruff check .
+```
+
+CI runs both on Linux and macOS, with ffmpeg installed so the encoder is
+actually exercised, and fails if anything in the non-integration set *skips* —
+a test that quietly stopped running is worse than one that fails. The
+integration tests need the align extra and the author's own audio, so they are
+not run there.
+
+```
+src/videokar/
+  lyrics/       parsing a Suno export, and normalising for the aligner
+  audio/        separation, peaks, voice activity
+  align/        forced alignment and the confidence flags
+  project/      the pivot document: model, edits, checks, i/o
+  config/       the style schema, presets, and how they resolve
+  render/       frames, ball, fonts, sprites, encoding
+  cli/          one module per command
+  web/          the sync view: routes/ per area, static/js/ per concern
+  pipeline.py   the stages, strung together
+  cache.py      keyed on file content, so a rename still hits
+  transcribe/   empty: making lyrics from the audio is not built yet
 ```
 
 `docs/prototype/` keeps the original throwaway scripts and the notes that

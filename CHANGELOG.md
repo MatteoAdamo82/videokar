@@ -324,3 +324,46 @@ All notable changes to this project are documented here. The format follows
 - `videokar lyrics` prints sections as headers rather than as a column, so a
   long tag no longer wraps every line of the song, and shows empty sections and
   directions.
+
+### Added
+
+- Continuous integration on Linux and macOS: ruff, the test suite with ffmpeg
+  installed so the encoder is actually exercised, and a wheel build. It fails
+  if anything in the non-integration set *skips* — a test that has quietly
+  stopped running is worse than one that fails.
+- The export dialog is grouped into four tabs — Text, Position, The ball, The
+  file — with the preview above them, staying put. Inside a tab, a control that
+  does not apply is hidden rather than greyed.
+- The bouncing circle has a colour and a size in the dialog. Size is a multiple
+  of what it would have been — a quarter of the text height — so the choice
+  holds when the text size or the preset changes. "Nothing bounces" is offered
+  as a third choice; the renderer already understood it.
+
+### Changed
+
+- `cli.py` is now a package with one module per command, and the helpers every
+  command needs (`fail`, `open_song`, `resolve_audio`) live in `cli/common.py`
+  instead of being private and scattered. The interface is unchanged: the help
+  of all eighteen commands and subcommands is identical, line for line.
+- The web routes moved out of `create_app` into `web/routes/`, five modules by
+  area, with the session reaching a handler as a dependency rather than through
+  a closure. `web/app.py` is now the assembly only. Every endpoint and every
+  refusal answers exactly as before.
+- The sync view's page carries no code of its own: the stylesheet and eleven
+  ES modules are served alongside it. Two tests hold that line.
+- The chunked upload loop, written out once per kind of file, is now
+  `web/uploads.save_upload`. Form parameters use FastAPI's `Annotated` form, so
+  the `B008` exemption that existed only for that file is gone.
+
+### Fixed
+
+- A PNG could not be taken back off once chosen. The dialog offered "a circle"
+  all along, but it sent a ball section that merely stopped naming a sprite —
+  and overrides merge per key, so the saved `kind = "sprite"` and the saved
+  filename stayed exactly where they were. The section is now always written in
+  full, so asking for the circle removes the PNG from `videokar.toml`.
+- In the preview, `squash` arrived as its own parameter and assigned over the
+  whole `[ball]` section, dropping a colour and a radius sent alongside it.
+- `.sheet label { display: block }` outranked the browser's own rule for
+  `[hidden]`, so a hidden control in the dialog was still laid out and still on
+  screen — it had merely stopped answering to the word.
