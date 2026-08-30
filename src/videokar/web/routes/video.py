@@ -145,8 +145,10 @@ def preview_frame(
             **({"font": font_path(session, font)} if font else {}),
             **({"size": font_size} if font_size is not None else {}),
         }
+    # Merged, never replaced: `extra` carries the ball's colour and radius, and
+    # a named parameter that assigns over the section would drop them.
     if squash is not None:
-        overrides["ball"] = {"squash": squash}
+        overrides["ball"] = {**overrides.get("ball", {}), "squash": squash}
     if sprite:
         overrides["ball"] = {
             **overrides.get("ball", {}),

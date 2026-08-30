@@ -102,6 +102,25 @@
                     font: 12px/1.5 ui-monospace, SFMono-Regular, monospace; }
   .sheet .actions { display: flex; gap: 8px; margin-top: 16px; align-items: center; }
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  /* A control that reads as a sentence, or a file picker, is worse in a column
+     than across the panel. */
+  .grid .wide { grid-column: 1 / -1; }
+  .grid .check { display: flex; gap: 8px; align-items: center; }
+  .grid .check input { width: auto; }
+  .grid .note { grid-column: 1 / -1; font-size: 11px; margin: 2px 0 0; }
+  /* The tabs sit under the still, which stays put: every one of these settings
+     is a question about how that frame looks. */
+  .tabs { display: flex; gap: 4px; margin: 14px 0 4px;
+          border-bottom: 1px solid var(--line); }
+  .tabs button { border: 0; background: none; color: var(--dim); padding: 7px 12px;
+                 border-bottom: 2px solid transparent; border-radius: 0; }
+  .tabs button:hover { color: var(--fg); background: none; }
+  .tabs button.on { color: var(--fg); border-bottom-color: #6f8bff; }
+  .tabbody[hidden] { display: none; }
+  /* `.sheet label { display: block }` outranks the browser's own rule for
+     [hidden], so without this a hidden control is still laid out and still
+     visible — it only stops answering to the word "hidden". */
+  .sheet [hidden] { display: none; }
   .item { display: flex; gap: 10px; align-items: baseline; padding: 8px 10px; border-radius: 7px;
           cursor: pointer; border: 1px solid transparent; }
   .item:hover { background: #24222f; border-color: #3a3750; }

@@ -759,3 +759,61 @@ def test_the_colours_and_the_shadow_are_remembered(client, tmp_path):
     assert style.main.colour_on == (155, 231, 196, 255)
     assert style.main.outline_width == 5
     assert style.shadow.colour == (0, 0, 0, 200)
+
+
+def test_a_named_parameter_does_not_drop_the_ball_extras(client):
+    # squash arrives as its own parameter and the colour through `extra`; the
+    # one must not assign over the section the other landed in.
+    import json
+
+    from videokar.render import FrameRenderer
+
+    seen = {}
+    original = FrameRenderer.__init__
+
+    def spy(self, song, style):
+        seen["ball"] = style.ball
+        original(self, song, style)
+
+    FrameRenderer.__init__ = spy
+    try:
+        response = client.get(
+            "/api/frame",
+            params={
+                "at": 20.5,
+                "squash": 0.3,
+                "extra": json.dumps({"ball": {"colour": "#00ff00", "radius": 42}}),
+            },
+        )
+    finally:
+        FrameRenderer.__init__ = original
+    assert response.status_code == 200
+    assert seen["ball"].squash == 0.3
+    assert seen["ball"].colour == (0, 255, 0, 255)
+    assert seen["ball"].radius == 42
+
+
+def test_the_circle_can_be_asked_for_after_a_sprite(client, tmp_path):
+    # Overrides merge per key, so a ball section that only stops naming a sprite
+    # leaves the saved one in place. Saying "ball" is what clears it.
+    from videokar.config import resolve_style
+    from videokar.web.models import RenderRequest
+    from videokar.web.style import style_for
+
+    client.post(
+        "/api/style",
+        json={"preset": "alpha", "overrides": {"ball": {"kind": "sprite", "sprite": "cat.png"}}},
+    )
+    saved = resolve_style(tmp_path / "videokar.toml")
+    assert saved.ball.kind == "sprite"
+
+    client.post(
+        "/api/style",
+        json={"preset": "alpha", "overrides": {"ball": {"kind": "ball", "colour": "#ff0000"}}},
+    )
+    now = resolve_style(tmp_path / "videokar.toml")
+    assert now.ball.kind == "ball"
+    assert now.ball.colour == (255, 0, 0, 255)
+
+    style = style_for(RenderRequest(preset="alpha", overrides={"ball": {"kind": "ball"}}))
+    assert style.ball.kind == "ball"
