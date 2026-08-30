@@ -367,3 +367,8 @@ All notable changes to this project are documented here. The format follows
 - `.sheet label { display: block }` outranked the browser's own rule for
   `[hidden]`, so a hidden control in the dialog was still laid out and still on
   screen — it had merely stopped answering to the word.
+- The PNG upload was gated on a PNG already being chosen, so with the circle
+  selected there was no way to add one: hiding what does not apply had hidden
+  the way out of the mode. It is always in the tab now, and adding a PNG
+  selects it — putting a file in the folder and changing nothing on screen
+  reads as the upload having failed.

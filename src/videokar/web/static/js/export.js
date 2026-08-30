@@ -103,7 +103,7 @@ const bounceTab = (data, was) => `
   <label data-when="ball sprite">squash and stretch — <b id="expsquashout">off</b>
     <input type="range" id="expsquash" min="0" max="80" value="${Math.round((was.ball.squash ?? 0) * 100)}">
   </label>
-  <label class="wide" data-when="sprite">…or add a PNG with transparency
+  <label class="wide">…or add a PNG with transparency — adding one selects it
     <input type="file" id="newsprite" accept="image/png">
   </label>`;
 
@@ -220,6 +220,10 @@ function wireUploads(data, refresh) {
         result.sprites.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
       picker.value = result.name;
       data.sprites = result.sprites;
+      // Adding one is how you say you want it. Leaving the circle selected
+      // would put the file in the folder and change nothing on screen, which
+      // reads as the upload having failed.
+      $("#expbounce").value = "sprite";
       refresh();
       // Kept either way — a solid badge is a legitimate thing to bounce — but
       // a lost alpha channel is worth hearing about before the render.
