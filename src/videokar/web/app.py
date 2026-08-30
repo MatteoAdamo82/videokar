@@ -21,6 +21,7 @@ from typing import Any
 
 from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from PIL import Image
 from pydantic import BaseModel
 
@@ -217,6 +218,11 @@ def create_app(
         if song_path and path == Path(song_path) and audio_path:
             return audio_path
         return _audio_for(load_song(path), path)
+
+    # The page's stylesheet and script, which the no-store middleware covers
+    # like everything else: a cached script against an updated server is the
+    # same trap as a cached page.
+    app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
     @app.get("/", response_class=HTMLResponse)
     def index() -> str:

@@ -1,0 +1,137 @@
+  :root {
+    --bg: #14131c; --panel: #1c1b26; --line: #2a2836; --ink: #e6e3f0;
+    --dim: #8d89a3; --on: #ffeebe; --off: #9b95b4; --ball: #ff7846;
+    --pin: #6fd08c; --flag: #e5c07b; --bad: #e06c75;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 13px/1.45 ui-sans-serif, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; align-items: center; gap: 10px; row-gap: 8px; flex-wrap: wrap;
+           padding: 10px 14px;
+           background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+  button { background: #2b293a; color: var(--ink); border: 1px solid #3a3750;
+           border-radius: 6px; padding: 5px 11px; cursor: pointer; font: inherit; }
+  button:hover { background: #35324a; }
+  button.primary { background: #3d5afe22; border-color: #5b6bd6; }
+  .time { font-variant-numeric: tabular-nums; color: var(--dim); min-width: 108px; }
+  .speed { color: var(--dim); display: flex; align-items: center; gap: 5px; }
+  select { background: #2b293a; color: var(--ink); border: 1px solid #3a3750;
+           border-radius: 6px; padding: 4px 6px; font: inherit; }
+  .grow { flex: 1; }
+  #status { color: var(--dim); }
+  #version { color: #55506a; font-variant-numeric: tabular-nums; }
+  #status.bad { color: var(--bad); }
+  #status.good { color: var(--pin); }
+
+  main { display: flex; height: calc(100vh - 49px); }
+  #side { width: 268px; flex: none; overflow-y: auto; background: var(--panel);
+          border-right: 1px solid var(--line); }
+  #side h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
+             color: var(--dim); margin: 14px 12px 6px; font-weight: 600; }
+  .row { padding: 5px 12px; cursor: pointer; display: flex; gap: 7px; align-items: baseline; }
+  .row:hover { background: #24222f; }
+  .row.active { background: #2f2c40; }
+  .row .id { color: var(--dim); font-variant-numeric: tabular-nums; min-width: 30px; }
+  .row .txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row.flagged .txt { color: var(--flag); }
+  .row.muted .txt { color: var(--dim); text-decoration: line-through; }
+
+  #scroll { flex: 1; overflow-x: auto; overflow-y: hidden; position: relative; }
+  #track { position: relative; height: 100%; }
+  canvas { position: absolute; inset: 0; }
+  #lines { position: absolute; left: 0; right: 0; top: 190px; height: 132px; }
+
+  .lineblock { position: absolute; height: 96px; border-radius: 7px;
+               background: #221f2e; border: 1px solid #363248; cursor: grab; }
+  .lineblock.pinned { border-color: var(--pin); background: #1e2a24; }
+  .lineblock.muted { opacity: .4; border-style: dashed; }
+  .lineblock.flagged { border-color: var(--flag); }
+  .lineblock.sel { box-shadow: 0 0 0 2px #5b6bd6; }
+  .lineblock .label { position: absolute; top: -18px; left: 0; font-size: 11px;
+                      color: var(--dim); white-space: nowrap; }
+  .lineblock .tools { position: absolute; top: -19px; right: 0; display: flex; gap: 4px; }
+  .lineblock .tools button { padding: 0 6px; font-size: 11px; line-height: 16px; }
+
+  .word { position: absolute; top: 26px; height: 44px; border-radius: 5px;
+          background: #322e45; border: 1px solid #443f5e; color: var(--off);
+          display: flex; align-items: center; justify-content: center;
+          padding: 0 6px; cursor: grab; overflow: hidden; white-space: nowrap;
+          font-size: 12px; }
+  /* Grab the middle to move the word, an edge to change how long it lasts. */
+  .grip { position: absolute; top: 0; bottom: 0; width: 6px; cursor: ew-resize; }
+  .grip.l { left: -1px; } .grip.r { right: -1px; }
+  .word:hover .grip { background: #6f8bff88; }
+  .word.resizing { border-color: #6f8bff; }
+  .word.sung { background: #4a3f2a; border-color: #7a6438; color: var(--on); }
+  .word.manual { border-bottom: 2px solid var(--ball); }
+  /* A real input rather than a contenteditable chip: focus, select-all, Enter
+     and Escape all behave, and there is no editable node for a re-render to
+     pull out from under the caret. */
+  .lineedit { position: fixed; z-index: 20; height: 32px; border-radius: 6px;
+              background: #1f2b3a; border: 1px solid #6f8bff; color: #fff;
+              font: 13px ui-sans-serif, sans-serif; padding: 0 8px; }
+  .wordedit { position: fixed; z-index: 20; height: 44px; border-radius: 5px;
+              background: #1f2b3a; border: 1px solid #5b6bd6; color: #fff;
+              text-align: center; font: 12px ui-sans-serif, sans-serif; padding: 0 4px; }
+  #playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--ball);
+              pointer-events: none; z-index: 3; }
+  #loopband { position: absolute; top: 0; bottom: 0; background: #6f8bff14;
+              border-left: 1px solid #6f8bff66; border-right: 1px solid #6f8bff66;
+              pointer-events: none; display: none; }
+  button.on { background: #6f8bff33; border-color: #6f8bff; color: #fff; }
+  /* Fixed to the window, not the track: pinned to the track it scrolled out of
+     sight the moment you looked at anything past the intro. */
+  .title { color: var(--ink); font-weight: 600; max-width: 220px; overflow: hidden;
+           text-overflow: ellipsis; white-space: nowrap; }
+  #veil { position: fixed; inset: 0; background: #0b0a12cc; z-index: 40;
+          display: none; align-items: flex-start; justify-content: center; padding: 60px 20px; }
+  #veil.open { display: flex; }
+  .sheet { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+           width: min(720px, 100%); max-height: 100%; overflow-y: auto; padding: 20px 22px; }
+  .sheet h1 { font-size: 16px; margin: 0 0 4px; }
+  .sheet h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
+              color: var(--dim); margin: 22px 0 8px; }
+  .sheet p { color: var(--dim); margin: 4px 0 0; }
+  .sheet label { display: block; color: var(--dim); margin: 10px 0 4px; }
+  .sheet input[type=color] { width: 100%; height: 34px; background: #14131c;
+                             border: 1px solid #3a3750; border-radius: 7px; padding: 2px; }
+  .sheet input[type=file], .sheet textarea, .sheet select, .sheet input[type=text] {
+    width: 100%; background: #14131c; color: var(--ink); border: 1px solid #3a3750;
+    border-radius: 7px; padding: 8px 10px; font: inherit; }
+  .sheet textarea { min-height: 150px; resize: vertical;
+                    font: 12px/1.5 ui-monospace, SFMono-Regular, monospace; }
+  .sheet .actions { display: flex; gap: 8px; margin-top: 16px; align-items: center; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .item { display: flex; gap: 10px; align-items: baseline; padding: 8px 10px; border-radius: 7px;
+          cursor: pointer; border: 1px solid transparent; }
+  .item:hover { background: #24222f; border-color: #3a3750; }
+  .item.current { border-color: #6f8bff; }
+  .item .meta { color: var(--dim); font-size: 11px; margin-left: auto; white-space: nowrap; }
+  .item .discard { padding: 1px 7px; font-size: 12px; opacity: 0; }
+  .item:hover .discard { opacity: 1; }
+  .item .discard:hover { background: #4a2530; border-color: var(--bad); color: #ffd9df; }
+  .item .confirm { display: flex; gap: 6px; align-items: center; margin-left: 10px;
+                   color: var(--bad); white-space: nowrap; }
+  .item .confirm button { padding: 1px 8px; font-size: 11px; }
+  .item .confirm .yes { border-color: var(--bad); color: #ffd9df; }
+  .job { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-top: 8px; }
+  .bar { height: 5px; background: #14131c; border-radius: 3px; overflow: hidden; margin-top: 7px; }
+  .bar i { display: block; height: 100%; background: #6f8bff; width: 0; transition: width .2s; }
+  .preview { display: block; width: 100%; border-radius: 8px; margin: 12px 0 4px;
+             background: #0d0c14; border: 1px solid var(--line); }
+  input[type=range] { width: 100%; accent-color: #6f8bff; }
+  /* Feedback for something done inside the sheet belongs inside the sheet. The
+     status bar is in the far corner of a window covered by a modal. */
+  .sheetsay { margin: 10px 0 0; min-height: 1.2em; }
+  .sheetsay.bad { color: var(--bad); font-weight: 600; }
+  .sheetsay.good { color: var(--pin); }
+  .job.failed { border-color: var(--bad); }
+  .job.done { border-color: var(--pin); }
+  a.dl { color: #9fb4ff; }
+
+  /* A dead server is the one failure that makes everything look frozen, so it
+     gets a band across the top rather than a line in the status bar. */
+  body.offline header { box-shadow: inset 0 3px 0 var(--bad); }
+  body.offline #status { color: var(--bad); font-weight: 600; }
+  #hint { position: fixed; bottom: 10px; left: 282px; right: 14px; color: var(--dim);
+          font-size: 11px; pointer-events: none; text-shadow: 0 0 6px var(--bg); }

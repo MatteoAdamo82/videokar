@@ -1,4 +1,6 @@
+import re
 import time
+from pathlib import Path
 
 import pytest
 
@@ -7,6 +9,7 @@ from conftest import make_line, make_song
 fastapi = pytest.importorskip("fastapi", reason="needs the web extra")
 from fastapi.testclient import TestClient  # noqa: E402
 
+import videokar.web.app  # noqa: E402
 from videokar.project import load_song, save_song  # noqa: E402
 from videokar.web import create_app  # noqa: E402
 
@@ -29,6 +32,30 @@ def test_the_page_is_served(client):
     response = client.get("/")
     assert response.status_code == 200
     assert "videokar" in response.text
+
+
+def test_the_page_carries_no_code_of_its_own(client):
+    # The page is markup and nothing else. Kept honest here because inline code
+    # is exactly what creeps back in one convenient line at a time.
+    page = client.get("/").text
+    assert "<script type=\"module\" src=\"/static/js/main.js\">" in page
+    assert '<link rel="stylesheet" href="/static/style.css">' in page
+    assert "<style>" not in page
+    assert re.search(r"<script(?![^>]*\ssrc=)", page) is None
+
+
+def test_the_stylesheet_and_every_module_are_served(client):
+    static = Path(videokar.web.app.__file__).parent / "static"
+    wanted = ["/static/style.css"] + sorted(
+        f"/static/js/{f.name}" for f in (static / "js").glob("*.js")
+    )
+    assert "/static/js/main.js" in wanted
+    for path in wanted:
+        response = client.get(path)
+        assert response.status_code == 200, path
+        # A cached script against a restarted server is the same trap as a
+        # cached page: it looks like the fix did not take.
+        assert response.headers["cache-control"] == "no-store", path
 
 
 def test_the_document_comes_back_with_fresh_flags(client):
