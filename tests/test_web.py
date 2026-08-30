@@ -44,6 +44,38 @@ def test_the_page_carries_no_code_of_its_own(client):
     assert re.search(r"<script(?![^>]*\ssrc=)", page) is None
 
 
+def test_every_route_is_mounted(client):
+    # The routers are listed by hand in web/routes/__init__.py, so a new module
+    # that nobody adds to ROUTERS would simply not be there. Each of these is a
+    # request the page makes. A handler is free to answer 404 — this fixture has
+    # no audio on disk — so what is checked is the routing 404, which carries
+    # FastAPI's own "Not Found" rather than a message meant for the reader.
+    for method, path in [
+        ("GET", "/api/song"),
+        ("GET", "/api/library"),
+        ("HEAD", "/api/library"),
+        ("POST", "/api/open"),
+        ("POST", "/api/edit"),
+        ("POST", "/api/undo"),
+        ("GET", "/api/peaks"),
+        ("GET", "/api/audio"),
+        ("POST", "/api/discard"),
+        ("POST", "/api/songs"),
+        ("GET", "/api/fonts"),
+        ("POST", "/api/fonts"),
+        ("POST", "/api/sprites"),
+        ("GET", "/api/style"),
+        ("POST", "/api/style"),
+        ("POST", "/api/render"),
+        ("GET", "/api/frame"),
+        ("GET", "/api/jobs"),
+    ]:
+        response = client.request(method, path)
+        assert response.status_code != 405, f"{method} {path} refuses that method"
+        if response.status_code == 404:
+            assert response.json()["detail"] != "Not Found", f"{method} {path} is not mounted"
+
+
 def test_the_stylesheet_and_every_module_are_served(client):
     static = Path(videokar.web.app.__file__).parent / "static"
     wanted = ["/static/style.css"] + sorted(
@@ -387,9 +419,10 @@ def test_a_render_with_a_setting_the_schema_refuses_says_so(client):
 def test_an_override_does_not_lose_the_named_output_fields(client):
     # width/height/fps arrive as their own fields and must survive being merged
     # with whatever else the page sent.
-    from videokar.web.app import RenderRequest, _style_for
+    from videokar.web.models import RenderRequest
+    from videokar.web.style import style_for
 
-    style = _style_for(
+    style = style_for(
         RenderRequest(preset="alpha", fps=48, overrides={"output": {"width": 640}})
     )
     assert (style.output.fps, style.output.width, style.output.format) == (48, 640, "prores4444")

@@ -75,6 +75,3 @@ extend-exclude = ["docs/prototype"]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.ruff.lint.per-file-ignores]
-# FastAPI declares request parameters through call expressions in defaults;
-# that is the framework's interface, not an accident.
-"src/videokar/web/app.py" = ["B008"]
