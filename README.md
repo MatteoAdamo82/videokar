@@ -350,6 +350,11 @@ A background and a transparent export contradict each other, so `alpha` with
 either one is refused before the render rather than after it. Use `youtube`,
 `shorts`, or `--opaque`.
 
+In the sync view it is the **Behind** tab: it lists the pictures and clips in
+the folder, says which each one is, and takes new ones. The preview shows it —
+for a clip, the frame it would be showing at that point in the song, so the
+still in the dialog is not quietly lying about what the render will produce.
+
 ```bash
 videokar sprite paw.png --scale 3
 ```

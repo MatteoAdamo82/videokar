@@ -74,3 +74,36 @@ async def add_sprite(
 @router.get("/sprites/{name}")
 def get_sprite(name: str, session: CurrentSession) -> Any:
     return FileResponse(sprite_path(session, name))
+
+
+@router.post("/backgrounds")
+async def add_background(
+    session: CurrentSession, media: Annotated[UploadFile, File()]
+) -> dict[str, Any]:
+    """Take a still or a clip to put behind the words."""
+    name = library.safe_name(media.filename or "background.jpg")
+    suffix = Path(name).suffix.lower()
+    if suffix not in library.BACKGROUND_SUFFIXES:
+        raise HTTPException(
+            422, "a background is a picture or a video — png, jpg, webp, mp4, mov, webm"
+        )
+    destination = await save_upload(media, session.workdir / name)
+
+    kind = "video" if suffix in library.CLIP_SUFFIXES else "image"
+    if kind == "image":
+        # Read now rather than at the render: a file that turns out not to be a
+        # picture should say so while it is still being chosen.
+        from ...config.schema import Background  # noqa: PLC0415
+        from ...render.background import BackgroundError, base_frame  # noqa: PLC0415
+
+        try:
+            base_frame(Background(image=str(destination)), (16, 16), (0, 0, 0, 255))
+        except BackgroundError as exc:
+            destination.unlink(missing_ok=True)
+            raise HTTPException(422, str(exc)) from exc
+
+    return {
+        "name": name,
+        "kind": kind,
+        "backgrounds": library.backgrounds(session.workdir),
+    }

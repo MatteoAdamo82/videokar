@@ -76,6 +76,11 @@ export const overridesFrom = (s, fps, audio) => ({
   shadow: lookOf(s).shadow,
   paren: {scale: s.paren_scale},
   ball: ballOf(s),
+  // The name, not a path: the server resolves it inside the working folder,
+  // and it says image or video by looking at the file rather than trusting us.
+  background: s.behind
+    ? {name: s.behind, fit: s.fit, dim: s.dim, loop: s.loop}
+    : {image: null, video: null},
 });
 
 // The query the preview endpoint wants for one frame at these settings.
@@ -97,6 +102,13 @@ export function previewQuery(s, at) {
   query.set("font_size", textSize(s));
   // The still and the render read the same sections, so what is judged here is
   // what gets encoded.
-  query.set("extra", JSON.stringify({...lookOf(s), ball: ballOf(s)}));
+  if (s.behind) {
+    query.set("behind", s.behind);
+    query.set("extra", JSON.stringify({
+      ...lookOf(s), ball: ballOf(s), background: {fit: s.fit, dim: s.dim},
+    }));
+  } else {
+    query.set("extra", JSON.stringify({...lookOf(s), ball: ballOf(s)}));
+  }
   return query;
 }

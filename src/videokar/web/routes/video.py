@@ -15,11 +15,13 @@ from PIL import Image
 from ...config import ConfigError, resolve_style, to_partial_toml
 from ...config.loader import read_toml
 from ...project import load_song
+from ...render.background import CLIP_SUFFIXES
 from .. import library
 from ..deps import CurrentSession
 from ..models import RenderRequest, StyleRequest
+from ..preview import still_for
 from ..session import SETTINGS
-from ..style import font_path, sprite_path, style_for
+from ..style import background_path, font_path, named_background, sprite_path, style_for
 
 router = APIRouter(prefix="/api")
 
@@ -41,12 +43,16 @@ def get_style(session: CurrentSession) -> dict[str, Any]:
 @router.post("/style")
 def save_style(request: StyleRequest, session: CurrentSession) -> dict[str, Any]:
     """Remember them, as a file the CLI can render from too."""
+    # The name the page sends becomes the path the schema wants, here as well as
+    # on the way to a render: this file is the one `videokar render -c` reads,
+    # and a key the schema has never heard of would be dropped in silence.
+    overrides = named_background(session, request.overrides)
     try:
-        resolve_style(preset=request.preset, overrides=request.overrides)
+        resolve_style(preset=request.preset, overrides=overrides)
     except ConfigError as exc:
         raise HTTPException(422, str(exc)) from exc
     path = session.workdir / SETTINGS
-    path.write_text(to_partial_toml(request.preset, request.overrides), encoding="utf-8")
+    path.write_text(to_partial_toml(request.preset, overrides), encoding="utf-8")
     return {"path": str(path), "saved": True}
 
 
@@ -83,6 +89,7 @@ def start_render(request: RenderRequest, session: CurrentSession) -> dict[str, A
             start=0.0,
             end=song.audio.duration,
             audio_path=found,
+            background=style.background,
             on_segment=lambda done, count: job.update(
                 message=f"segment {done} of {count}", progress=done / count
             ),
@@ -108,6 +115,7 @@ def preview_frame(
     paren_scale: float | None = None,
     sprite: str | None = None,
     sprite_scale: float | None = None,
+    behind: str | None = None,
     squash: float | None = None,
     font: str | None = None,
     font_size: int | None = None,
@@ -149,6 +157,17 @@ def preview_frame(
     # a named parameter that assigns over the section would drop them.
     if squash is not None:
         overrides["ball"] = {**overrides.get("ball", {}), "squash": squash}
+    if behind:
+        path = Path(background_path(session, behind))
+        if path.suffix.lower() in CLIP_SUFFIXES:
+            # A clip is composited by ffmpeg when encoding, which has not
+            # happened yet — so one frame of it stands in for the whole thing.
+            overrides["background"] = {
+                **overrides.get("background", {}),
+                "image": still_for(path, at),
+            }
+        else:
+            overrides["background"] = {**overrides.get("background", {}), "image": str(path)}
     if sprite:
         overrides["ball"] = {
             **overrides.get("ball", {}),
@@ -162,11 +181,14 @@ def preview_frame(
         raise HTTPException(422, str(exc)) from exc
 
     from ...render import FrameRenderer  # noqa: PLC0415
+    from ...render.background import BackgroundError  # noqa: PLC0415
     from ...render.sprites import SpriteError  # noqa: PLC0415
 
     try:
         frame = FrameRenderer(song, style).frame(at)
-    except SpriteError as exc:
+    except (SpriteError, BackgroundError) as exc:
+        # A background on a transparent preset is the common one, and the
+        # message says which presets do take one.
         raise HTTPException(422, str(exc)) from exc
     # Composited onto the background it would be encoded onto, so a
     # transparent overlay is judged the way it will be seen.

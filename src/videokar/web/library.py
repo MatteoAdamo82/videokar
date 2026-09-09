@@ -16,6 +16,7 @@ from ..align.confidence import Flag
 from ..lyrics import parse_lyrics
 from ..project import build_song, load_song, save_song
 from ..project.io import ProjectError
+from ..render.background import CLIP_SUFFIXES as _CLIP_SUFFIXES
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,15 @@ AUDIO_SUFFIXES = {
     ".opus", ".aac", ".wma", ".mp4", ".caf", ".alac", ".aifc",
 }  # fmt: skip
 SPRITE_SUFFIXES = {".png"}
+
+PICTURE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"}
+"""Stills Pillow reads, offered as something to put behind the words."""
+
+CLIP_SUFFIXES = _CLIP_SUFFIXES
+"""Clips ffmpeg composites while encoding. The renderer decides the list; it is
+the half that has to tell a still from a clip when it draws one."""
+
+BACKGROUND_SUFFIXES = PICTURE_SUFFIXES | CLIP_SUFFIXES
 _SAFE = re.compile(r"[^A-Za-z0-9._-]+")
 
 
@@ -118,6 +128,23 @@ def sprites(directory: Path) -> list[str]:
         for path in directory.glob("*.png")
         if path.is_file() and path.stat().st_size > 0
     )
+
+
+def backgrounds(directory: Path) -> list[dict[str, str]]:
+    """Stills and clips in the working directory, each said to be which.
+
+    Which one it is decides where it gets drawn — a still by Pillow into every
+    frame, a clip by ffmpeg while encoding — so the page is told rather than
+    left to guess from the name.
+    """
+    found = [
+        {"name": path.name, "kind": "video" if path.suffix.lower() in CLIP_SUFFIXES else "image"}
+        for path in sorted(directory.iterdir())
+        if path.is_file()
+        and path.suffix.lower() in BACKGROUND_SUFFIXES
+        and path.stat().st_size > 0
+    ]
+    return found
 
 
 def next_output(directory: Path, stem: str, suffix: str, taken: set[str] | None = None) -> Path:

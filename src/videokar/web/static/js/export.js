@@ -16,6 +16,8 @@ import {presetHeight, defaultSize, hexOf, overridesFrom, previewQuery} from "./s
 const FPS = [23.976, 24, 25, 29.97, 30, 50, 59.94, 60];
 const ANCHORS = [["bottom", "near the bottom"], ["center", "in the middle"], ["top", "near the top"]];
 const BOUNCERS = [["ball", "a circle"], ["sprite", "a PNG of your own"], ["none", "nothing"]];
+const FITS = [["cover", "fill the frame, crop the rest"], ["contain", "fit it all in, pad the rest"],
+              ["stretch", "stretch to fit exactly"]];
 
 // Every control that redraws the still when it moves, by tab.
 const TABS = [
@@ -30,6 +32,11 @@ const TABS = [
     id: "bounce",
     label: "The ball",
     controls: ["expbounce", "expballcol", "expballsize", "expsprite", "expspritescale", "expsquash"],
+  },
+  {
+    id: "behind",
+    label: "Behind",
+    controls: ["expbehind", "expfit", "expdim", "exploop"],
   },
   {id: "file", label: "The file", controls: ["expreset", "expfps", "expaudio"]},
 ];
@@ -107,6 +114,30 @@ const bounceTab = (data, was) => `
     <input type="file" id="newsprite" accept="image/png">
   </label>`;
 
+const behindTab = (data, was) => `
+  <label class="wide">what is behind the words<select id="expbehind">
+    <option value="">nothing — the preset's own colour</option>
+    ${(data.backgrounds || []).map((b) =>
+      option(esc(b.name), `${esc(b.name)} — ${b.kind === "video" ? "a clip" : "a picture"}`,
+             was.background.name)).join("")}
+  </select></label>
+  <label data-when="behind">how it fits<select id="expfit">
+    ${FITS.map(([v, t]) => option(v, t, was.background.fit || "cover")).join("")}
+  </select></label>
+  <label data-when="behind">darken it — <b id="expdimout">off</b>
+    <input type="range" id="expdim" min="0" max="80" value="${Math.round((was.background.dim ?? 0) * 100)}">
+  </label>
+  <label class="wide check" data-when="behind">
+    <input type="checkbox" id="exploop" ${was.background.loop === false ? "" : "checked"}>
+    repeat a clip shorter than the song — off holds its last frame instead
+  </label>
+  <label class="wide">…or add a picture or a clip
+    <input type="file" id="newbehind" accept="image/*,video/*">
+  </label>
+  <p class="wide note">A background and a transparent overlay contradict each other: with one
+     of these the file cannot be the alpha preset. Pick youtube or shorts under
+     <b>The file</b>.</p>`;
+
 const fileTab = (data, was) => `
   <label>preset<select id="expreset">
     ${data.presets.map((p) =>
@@ -128,6 +159,7 @@ function panel(data, fonts, was, marginPct) {
     text: textTab(fonts, was),
     place: placeTab(was, marginPct),
     bounce: bounceTab(data, was),
+    behind: behindTab(data, was),
     file: fileTab(data, was),
   };
   return `
@@ -167,6 +199,10 @@ const settings = () => ({
   outline_width: Number($("#expout").value),
   outline: $("#expoutcol").value,
   shadow: $("#expshadow").value ? $("#expshadowcol").value : null,
+  behind: $("#expbehind").value,
+  fit: $("#expfit").value,
+  dim: Number($("#expdim").value) / 100,
+  loop: $("#exploop").checked,
 });
 
 function wireTabs() {
@@ -185,9 +221,11 @@ function wireTabs() {
 // A PNG's size means nothing while a circle is bouncing, and the other way
 // round. Hiding what does not apply is what makes the tab readable.
 function showWhatApplies() {
-  const kind = $("#expbounce").value;
+  // Two independent modes, so a label says which words it wants to see.
+  const on = [$("#expbounce").value];
+  if ($("#expbehind").value) on.push("behind");
   for (const label of document.querySelectorAll("[data-when]")) {
-    label.hidden = !label.dataset.when.split(" ").includes(kind);
+    label.hidden = !label.dataset.when.split(" ").some((word) => on.includes(word));
   }
 }
 
@@ -206,6 +244,25 @@ function wireUploads(data, refresh) {
       refresh();
       say(`${result.font.label} added`, "good");
     } catch (err) { report(err); }
+  };
+
+  $("#newbehind").onchange = async () => {
+    const file = $("#newbehind").files[0];
+    if (!file) return;
+    const body = new FormData();
+    body.append("media", file);
+    try {
+      const result = await api("/api/backgrounds", {method: "POST", body});
+      const picker = $("#expbehind");
+      picker.innerHTML = `<option value="">nothing — the preset's own colour</option>` +
+        result.backgrounds.map((b) =>
+          `<option value="${esc(b.name)}">${esc(b.name)} — ${
+            b.kind === "video" ? "a clip" : "a picture"}</option>`).join("");
+      picker.value = result.name;
+      data.backgrounds = result.backgrounds;
+      refresh();
+      say(`${result.name} is behind the words now`, "good");
+    } catch (err) { say(err.message, "bad"); }
   };
 
   $("#newsprite").onchange = async () => {
@@ -252,6 +309,7 @@ export async function openExport() {
     output: saved.overrides.output || {},
     main: saved.overrides.main || {},
     shadow: saved.overrides.shadow || {},
+    background: saved.overrides.background || {},
   };
   const marginPct = was.layout.margin_y != null
     ? Math.round(was.layout.margin_y * 100 / presetHeight(was.preset))
@@ -269,9 +327,20 @@ export async function openExport() {
 
   const drawPreview = () => {
     const image = $("#preview");
-    image.onerror = () =>
-      say("the preview could not be drawn — check the status line above", "bad");
-    image.src = "/api/frame?" + previewQuery(settings(), previewTime());
+    const url = "/api/frame?" + previewQuery(settings(), previewTime());
+    // An <img> that fails says nothing about why. The reason is in the body the
+    // server sent, so on failure ask again and read it — a refused setting is
+    // usually a sentence explaining what to pick instead.
+    image.onerror = async () => {
+      try {
+        const answer = await fetch(url);
+        const detail = (await answer.json()).detail;
+        say(detail || "the preview could not be drawn", "bad");
+      } catch {
+        say("the preview could not be drawn", "bad");
+      }
+    };
+    image.src = url;
   };
 
   let previewTimer = null;

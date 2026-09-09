@@ -14,6 +14,9 @@ from PIL import Image, ImageEnhance
 
 from ..config.schema import Background
 
+CLIP_SUFFIXES = {".mp4", ".mov", ".m4v", ".webm", ".mkv", ".avi"}
+"""Told apart by suffix: a still is drawn here, a clip by ffmpeg when encoding."""
+
 
 class BackgroundError(RuntimeError):
     """The background could not be used."""

@@ -24,6 +24,7 @@ def get_library(session: CurrentSession) -> dict[str, Any]:
         "songs": [entry.as_dict() for entry in library.scan(session.workdir)],
         "presets": available_presets(),
         "sprites": library.sprites(session.workdir),
+        "backgrounds": library.backgrounds(session.workdir),
     }
 
 

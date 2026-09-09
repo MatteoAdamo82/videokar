@@ -817,3 +817,178 @@ def test_the_circle_can_be_asked_for_after_a_sprite(client, tmp_path):
 
     style = style_for(RenderRequest(preset="alpha", overrides={"ball": {"kind": "ball"}}))
     assert style.ball.kind == "ball"
+
+
+@pytest.fixture
+def wall(client, tmp_path):
+    """A picture in the working folder: red left, blue right."""
+    from PIL import Image
+
+    image = Image.new("RGB", (400, 200))
+    image.paste((200, 30, 30), (0, 0, 200, 200))
+    image.paste((30, 30, 200), (200, 0, 400, 200))
+    path = tmp_path / "wall.png"
+    image.save(path)
+    return path
+
+
+def test_the_library_says_which_backgrounds_are_stills_and_which_are_clips(client, wall):
+    (wall.parent / "loop.mp4").write_bytes(b"not really a clip, but named like one")
+    listed = {b["name"]: b["kind"] for b in client.get("/api/library").json()["backgrounds"]}
+    assert listed["wall.png"] == "image"
+    assert listed["loop.mp4"] == "video"
+
+
+def test_a_background_can_be_added(client):
+    import io
+
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    Image.new("RGB", (20, 20), (0, 200, 0)).save(buffer, format="PNG")
+    response = client.post(
+        "/api/backgrounds", files={"media": ("meadow.png", buffer.getvalue(), "image/png")}
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["name"] == "meadow.png"
+    assert body["kind"] == "image"
+    assert {b["name"] for b in body["backgrounds"]} == {"meadow.png"}
+
+
+def test_a_background_that_is_not_a_picture_is_refused_and_not_kept(client, tmp_path):
+    response = client.post(
+        "/api/backgrounds", files={"media": ("liar.png", b"hello", "image/png")}
+    )
+    assert response.status_code == 422
+    # Told now rather than minutes into a render — and not left in the folder.
+    assert not (tmp_path / "liar.png").exists()
+
+
+def test_a_background_of_the_wrong_sort_is_refused(client):
+    response = client.post("/api/backgrounds", files={"media": ("notes.txt", b"x", "text/plain")})
+    assert response.status_code == 422
+    assert "picture or a video" in response.json()["detail"]
+
+
+def test_the_preview_is_drawn_over_the_background(client, wall):
+    response = client.get(
+        "/api/frame",
+        params={"at": 20.5, "preset": "youtube", "behind": wall.name, "width": 200},
+    )
+    assert response.status_code == 200
+    import io
+
+    from PIL import Image
+
+    frame = Image.open(io.BytesIO(response.content)).convert("RGB")
+    assert frame.getpixel((10, 10))[0] > frame.getpixel((10, 10))[2]
+    assert frame.getpixel((190, 10))[2] > frame.getpixel((190, 10))[0]
+
+
+def test_the_preview_dims_the_background(client, wall):
+    import io
+    import json
+
+    from PIL import Image
+
+    shots = {}
+    for dim in (0.0, 0.6):
+        response = client.get(
+            "/api/frame",
+            params={
+                "at": 20.5,
+                "preset": "youtube",
+                "behind": wall.name,
+                "width": 100,
+                "extra": json.dumps({"background": {"dim": dim}}),
+            },
+        )
+        shots[dim] = Image.open(io.BytesIO(response.content)).convert("RGB").getpixel((5, 5))
+    assert shots[0.6][0] < shots[0.0][0]
+
+
+def test_a_background_on_a_transparent_preset_says_which_presets_take_one(client, wall):
+    response = client.get(
+        "/api/frame", params={"at": 20.5, "preset": "alpha", "behind": wall.name}
+    )
+    assert response.status_code == 422
+    assert "youtube" in response.json()["detail"]
+
+
+def test_a_background_outside_the_folder_is_refused(client):
+    response = client.get("/api/frame", params={"at": 20.5, "behind": "../secrets.png"})
+    assert response.status_code == 403
+
+
+def test_a_render_resolves_a_background_name_to_a_file_in_the_folder(client, wall):
+    from videokar.web.models import RenderRequest
+    from videokar.web.style import style_for
+
+    session = client.app.state.session
+    style = style_for(
+        RenderRequest(preset="youtube", overrides={"background": {"name": wall.name, "dim": 0.4}}),
+        session,
+    )
+    assert style.background.image == str(wall)
+    assert style.background.video is None
+    assert style.background.dim == 0.4
+
+
+def test_a_render_tells_a_clip_from_a_still_by_the_file(client, tmp_path):
+    from videokar.web.models import RenderRequest
+    from videokar.web.style import style_for
+
+    clip = tmp_path / "loop.mov"
+    clip.write_bytes(b"x")
+    style = style_for(
+        RenderRequest(preset="youtube", overrides={"background": {"name": "loop.mov"}}),
+        client.app.state.session,
+    )
+    assert style.background.video == str(clip)
+    assert style.background.image is None
+
+
+def test_the_saved_file_names_the_background_the_way_the_cli_reads_it(client, wall, tmp_path):
+    # The promise the README makes: what the dialog produces, the command line
+    # renders. A key the schema has never heard of is dropped in silence, so a
+    # bare filename in there would mean no background at all from a terminal.
+    from videokar.config import resolve_style
+
+    client.post(
+        "/api/style",
+        json={
+            "preset": "youtube",
+            "overrides": {"background": {"name": wall.name, "dim": 0.3}},
+        },
+    )
+    written = (tmp_path / "videokar.toml").read_text()
+    assert "name =" not in written
+    style = resolve_style(tmp_path / "videokar.toml")
+    assert style.background.image == str(wall)
+    assert style.background.dim == 0.3
+
+
+def test_a_render_is_given_the_background_to_composite(client, wall, monkeypatch):
+    # The renderer draws see-through frames for a clip and ffmpeg puts the clip
+    # underneath. If the encoder is never told, it flattens them onto the
+    # preset's colour instead and the background silently disappears.
+    seen = {}
+
+    def spy(frame_at, destination, output, **kwargs):
+        seen.update(kwargs)
+        destination.write_bytes(b"")
+        return destination
+
+    # Imported inside the handler, so it is patched where it lives.
+    monkeypatch.setattr("videokar.render.encode.render_segmented", spy)
+    response = client.post(
+        "/api/render",
+        json={"preset": "youtube", "overrides": {"background": {"name": wall.name}}},
+    )
+    assert response.status_code == 200
+    for _ in range(50):
+        if client.get(f"/api/jobs/{response.json()['id']}").json()["status"] != "running":
+            break
+        time.sleep(0.05)
+    assert seen["background"].image == str(wall)

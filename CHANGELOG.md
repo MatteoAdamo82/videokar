@@ -357,11 +357,13 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
-- A PNG could not be taken back off once chosen. The dialog offered "a circle"
-  all along, but it sent a ball section that merely stopped naming a sprite —
-  and overrides merge per key, so the saved `kind = "sprite"` and the saved
-  filename stayed exactly where they were. The section is now always written in
-  full, so asking for the circle removes the PNG from `videokar.toml`.
+- The `[ball]` section is now written in full, always saying which kind is
+  meant, rather than leaving it to be inferred from whether a sprite is named.
+  (This was committed as the fix for "a PNG cannot be taken back off", with a
+  merge-per-key explanation that turns out to be wrong: `videokar.toml` is
+  rewritten whole rather than merged, so the old code did drop the sprite. The
+  change is still worth having — it is what let the circle have a colour and a
+  size of its own — but it was not the bug that was reported.)
 - In the preview, `squash` arrived as its own parameter and assigned over the
   whole `[ball]` section, dropping a colour and a radius sent alongside it.
 - `.sheet label { display: block }` outranked the browser's own rule for
@@ -381,3 +383,22 @@ All notable changes to this project are documented here. The format follows
   `image`/`video`, `loop`, `fit` and `dim`. A short clip repeats, and carries on
   across a segment boundary rather than restarting at it. A background on a
   transparent export is a contradiction and is refused before the render.
+
+- The background reaches the view: an upload that takes a picture or a clip, a
+  **Behind** tab that lists what the folder holds and says which is which, and a
+  preview that shows it — for a clip, the frame it would be showing at that
+  point, extracted with ffmpeg, rather than a still that quietly lies.
+
+### Fixed
+
+- The web render never told the encoder about the background, so a clip was
+  flattened away and the video came out on the preset's flat colour. An edit
+  that was meant to pass it through had not matched the file it was aimed at,
+  and nothing checked. There is a test now.
+- The export dialog saved `background.name` into `videokar.toml` — a key the
+  schema has never heard of, dropped in silence, so the same settings rendered
+  from a terminal had no background at all. The name is resolved to a path on
+  the way in, as it already was on the way to a render.
+- A refused preview said only that it could not be drawn. It now reads the
+  reason the server gave, which for a background on the alpha preset is a
+  sentence naming the presets that do take one.
