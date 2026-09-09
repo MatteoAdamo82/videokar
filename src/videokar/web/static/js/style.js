@@ -17,6 +17,21 @@ export const defaultSize = (name) => Math.max(12, Math.round(presetHeight(name) 
 export const hexOf = (value, fallback) =>
   typeof value === "string" && value.startsWith("#") ? value.slice(0, 7) : fallback;
 
+// Every measurement is a fraction of the frame, so the same numbers hold at
+// 1080p and in a vertical short — and so a drag in the preview has one kind of
+// number to write back.
+export const meterOf = (s) => (s.meter === "none" ? {kind: "none"} : {
+  kind: s.meter,
+  bands: s.bands,
+  colour: s.meter_colour,
+  width: s.meter_w,
+  height: s.meter_h,
+  x: s.meter_x,
+  y: s.meter_y,
+  gap: s.gap,
+  mirror: s.mirror,
+});
+
 // The text size the controls add up to, which the ball is then measured against.
 export const textSize = (s) => Math.round(defaultSize(s.preset) * s.size_scale);
 
@@ -78,6 +93,7 @@ export const overridesFrom = (s, fps, audio) => ({
   ball: ballOf(s),
   // The name, not a path: the server resolves it inside the working folder,
   // and it says image or video by looking at the file rather than trusting us.
+  meter: meterOf(s),
   background: s.behind
     ? {name: s.behind, fit: s.fit, dim: s.dim, loop: s.loop}
     : {image: null, video: null},
@@ -105,10 +121,11 @@ export function previewQuery(s, at) {
   if (s.behind) {
     query.set("behind", s.behind);
     query.set("extra", JSON.stringify({
-      ...lookOf(s), ball: ballOf(s), background: {fit: s.fit, dim: s.dim},
+      ...lookOf(s), ball: ballOf(s), meter: meterOf(s),
+      background: {fit: s.fit, dim: s.dim},
     }));
   } else {
-    query.set("extra", JSON.stringify({...lookOf(s), ball: ballOf(s)}));
+    query.set("extra", JSON.stringify({...lookOf(s), ball: ballOf(s), meter: meterOf(s)}));
   }
   return query;
 }

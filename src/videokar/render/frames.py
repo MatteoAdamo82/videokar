@@ -12,12 +12,14 @@ from dataclasses import dataclass
 
 from PIL import Image, ImageDraw, ImageFilter
 
+from ..audio.spectrum import Spectrum
 from ..config.schema import RGBA, Ball, Shadow, Style, resolved_ball, resolved_shadow
 from ..project.model import Line, Song
 from .background import BackgroundError, base_frame
 from .ball import ball_position
 from .circle import draw_ball
 from .layout import LineLayout, layout_line
+from .meter import draw as draw_meter
 from .sprites import SpriteError, load_sprite
 
 
@@ -62,9 +64,12 @@ class Cue:
 class FrameRenderer:
     """Draws the karaoke overlay for a song at any point in time."""
 
-    def __init__(self, song: Song, style: Style | None = None) -> None:
+    def __init__(
+        self, song: Song, style: Style | None = None, spectrum: Spectrum | None = None
+    ) -> None:
         self.song = song
         self.style = style or Style()
+        self.spectrum = spectrum
         if self.style.ball.kind == "sprite":
             if not self.style.ball.sprite:
                 raise SpriteError("the ball is set to 'sprite' but no image was given")
@@ -170,6 +175,9 @@ class FrameRenderer:
         image = base_frame(
             self.style.background, (output.width, output.height), output.background
         )
+        if self.style.meter.kind != "none" and self.spectrum is not None:
+            # Under the words: the meter is the room, the lyrics are the point.
+            draw_meter(image, self.style.meter, self.spectrum.at(time))
         cue = self.cue_at(time)
         if cue is None:
             return image

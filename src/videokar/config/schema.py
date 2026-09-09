@@ -27,6 +27,7 @@ Anchor = Literal["top", "center", "bottom"]
 OutputFormat = Literal["mp4", "prores4444", "animation", "png_mov", "png"]
 BallKind = Literal["ball", "sprite", "none"]
 Fit = Literal["cover", "contain", "stretch"]
+MeterKind = Literal["none", "bars", "wave"]
 TransitionKind = Literal["fade", "cut"]
 
 _HEX = re.compile(r"^#?(?P<digits>[0-9a-fA-F]{3,8})$")
@@ -134,6 +135,52 @@ class Shadow:
         ge=0.0,
         le=100.0,
         description="Softness in pixels. Empty scales with the text; 0 is a hard shadow.",
+    )
+
+
+@dataclass(frozen=True)
+class Meter:
+    """The music, drawn.
+
+    Off by default. Everything about where it sits is a fraction of the frame,
+    so the same numbers hold at 1080p and in a vertical short — and so a future
+    drag in the preview has one kind of number to write back.
+    """
+
+    kind: MeterKind = Field(default="none", description="none, bars, or wave.")
+    bands: int = Field(
+        default=48,
+        ge=4,
+        le=200,
+        description="How many bars. Beyond about eighty they stop being bars.",
+    )
+    colour: RGBA = (255, 255, 255, 210)
+    x: float = Field(default=0.5, ge=0.0, le=1.0, description="Its centre, across the frame.")
+    y: float = Field(default=0.5, ge=0.0, le=1.0, description="Its centre, down the frame.")
+    width: float = Field(
+        default=0.72, gt=0.0, le=1.0, description="How much of the frame's width it spans."
+    )
+    height: float = Field(
+        default=0.13, gt=0.0, le=1.0, description="How tall a full-scale band is drawn."
+    )
+    gap: float = Field(
+        default=0.35,
+        ge=0.0,
+        lt=1.0,
+        description="Space between bars, as a share of the room each one gets.",
+    )
+    mirror: bool = Field(
+        default=True,
+        description="Grow up and down from the middle. Off grows upward from a baseline.",
+    )
+    baseline: bool = Field(
+        default=True, description="Draw the line the bars stand on, so silence is still something."
+    )
+    floor: float = Field(
+        default=0.04,
+        ge=0.0,
+        le=0.5,
+        description="Shortest a bar is drawn, so a quiet passage keeps its shape.",
     )
 
 
@@ -495,6 +542,7 @@ class Style:
     ball: BallStyle = field(default_factory=BallStyle)
     shadow: Shadow = field(default_factory=Shadow)
     background: Background = field(default_factory=Background)
+    meter: Meter = field(default_factory=Meter)
 
     def voice_style(self, voice: str) -> TextStyle:
         """The text style for a voice, with the second voice's overrides applied.

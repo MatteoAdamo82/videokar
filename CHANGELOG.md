@@ -402,3 +402,15 @@ All notable changes to this project are documented here. The format follows
 - A refused preview said only that it could not be drawn. It now reads the
   reason the server gave, which for a background on the alpha preset is a
   sentence naming the presets that do take one.
+
+- The music, drawn: `--meter bars` or `--meter wave`, and a **The music** tab in
+  the view. Bands are spaced logarithmically, magnitudes are in decibels, and
+  the bars rise fast and fall slowly — the three things that separate a meter
+  that looks like music from one that looks like noise. Everything about where
+  it sits is a fraction of the frame, and the geometry is held inside the
+  picture rather than allowed to run off it.
+
+  Drawn in Pillow inside our own renderer rather than by ffmpeg's `showfreqs`
+  and `showvolume`, which is what the removed version used: those filters
+  decide their own size, placement and colours, which is why that version was
+  off-centre and clipped and had to go.

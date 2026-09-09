@@ -771,9 +771,9 @@ def test_a_named_parameter_does_not_drop_the_ball_extras(client):
     seen = {}
     original = FrameRenderer.__init__
 
-    def spy(self, song, style):
+    def spy(self, song, style, **rest):
         seen["ball"] = style.ball
-        original(self, song, style)
+        original(self, song, style, **rest)
 
     FrameRenderer.__init__ = spy
     try:
@@ -992,3 +992,66 @@ def test_a_render_is_given_the_background_to_composite(client, wall, monkeypatch
             break
         time.sleep(0.05)
     assert seen["background"].image == str(wall)
+
+
+@pytest.fixture
+def with_audio(client, tmp_path):
+    """Real audio beside the document, so the meter has something to read."""
+    import numpy as np
+    import soundfile as sf
+
+    from videokar.project import load_song, save_song
+
+    rate = 22_050
+    t = np.linspace(0, 40, rate * 40, dtype=np.float32)
+    sf.write(tmp_path / "song.wav", np.sin(2 * np.pi * 300 * t) * 0.4, rate)
+    song = load_song(client.song_path)
+    song.audio.path = str(tmp_path / "song.wav")
+    save_song(song, client.song_path)
+    return tmp_path / "song.wav"
+
+
+def test_the_preview_can_draw_the_meter(client, with_audio):
+    import io
+    import json
+
+    from PIL import Image
+
+    shots = {}
+    for kind in ("none", "bars"):
+        response = client.get(
+            "/api/frame",
+            params={
+                "at": 20.5,
+                "preset": "youtube",
+                "width": 160,
+                "extra": json.dumps({"meter": {"kind": kind, "bands": 16}}),
+            },
+        )
+        assert response.status_code == 200, kind
+        image = Image.open(io.BytesIO(response.content)).convert("L")
+        shots[kind] = sum(1 for pixel in image.get_flattened_data() if pixel > 40)
+    assert shots["bars"] > shots["none"]
+
+
+def test_the_meter_says_when_the_audio_is_missing(client):
+    import json
+
+    # The fixture's document names an audio file that is not there.
+    response = client.get(
+        "/api/frame",
+        params={"at": 20.5, "preset": "youtube", "extra": json.dumps({"meter": {"kind": "bars"}})},
+    )
+    assert response.status_code == 422
+    assert "meter needs the audio" in response.json()["detail"]
+
+
+def test_a_render_with_a_meter_is_refused_before_the_job_starts(client):
+    # A missing file should be a refusal the dialog can show, not a job that
+    # fails a minute in.
+    response = client.post(
+        "/api/render",
+        json={"preset": "youtube", "overrides": {"meter": {"kind": "bars"}}},
+    )
+    assert response.status_code == 422
+    assert "meter needs the audio" in response.json()["detail"]

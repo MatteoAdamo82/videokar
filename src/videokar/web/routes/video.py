@@ -26,6 +26,24 @@ from ..style import background_path, font_path, named_background, sprite_path, s
 router = APIRouter(prefix="/api")
 
 
+def _spectrum_for(session, path, style):
+    """The analysis the meter needs, or nothing when it is switched off.
+
+    Cached beside the audio, so only the first frame drawn for a song pays for
+    it and every slider after that is instant.
+    """
+    if style.meter.kind == "none":
+        return None
+    found = session.audio_of(path)
+    if found is None:
+        raise HTTPException(
+            422, "the meter needs the audio, and the file this document names is not there"
+        )
+    from ...audio.spectrum import spectrum_for  # noqa: PLC0415
+
+    return spectrum_for(found, fps=float(style.output.rate), bands=style.meter.bands)
+
+
 @router.get("/style")
 def get_style(session: CurrentSession) -> dict[str, Any]:
     """The choices last saved in this folder, for the dialog to restore."""
@@ -77,8 +95,12 @@ def start_render(request: RenderRequest, session: CurrentSession) -> dict[str, A
     session.reserved.add(destination.name)
     found = session.audio_of(path) if style.output.audio else None
 
+    # Analysed before the job starts, so a missing audio file is a refusal the
+    # dialog can show rather than a job that fails a minute later.
+    spectrum = _spectrum_for(session, path, style)
+
     def work(job):
-        renderer = FrameRenderer(song, style)
+        renderer = FrameRenderer(song, style, spectrum=spectrum)
         if not renderer.cues:
             raise ValueError("nothing to draw — every line is unsung or untimed")
         job.update(message="rendering", progress=0.0)
@@ -185,7 +207,7 @@ def preview_frame(
     from ...render.sprites import SpriteError  # noqa: PLC0415
 
     try:
-        frame = FrameRenderer(song, style).frame(at)
+        frame = FrameRenderer(song, style, spectrum=_spectrum_for(session, path, style)).frame(at)
     except (SpriteError, BackgroundError) as exc:
         # A background on a transparent preset is the common one, and the
         # message says which presets do take one.

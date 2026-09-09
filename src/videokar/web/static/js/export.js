@@ -16,6 +16,7 @@ import {presetHeight, defaultSize, hexOf, overridesFrom, previewQuery} from "./s
 const FPS = [23.976, 24, 25, 29.97, 30, 50, 59.94, 60];
 const ANCHORS = [["bottom", "near the bottom"], ["center", "in the middle"], ["top", "near the top"]];
 const BOUNCERS = [["ball", "a circle"], ["sprite", "a PNG of your own"], ["none", "nothing"]];
+const METERS = [["none", "nothing"], ["bars", "bars"], ["wave", "a wave"]];
 const FITS = [["cover", "fill the frame, crop the rest"], ["contain", "fit it all in, pad the rest"],
               ["stretch", "stretch to fit exactly"]];
 
@@ -32,6 +33,12 @@ const TABS = [
     id: "bounce",
     label: "The ball",
     controls: ["expbounce", "expballcol", "expballsize", "expsprite", "expspritescale", "expsquash"],
+  },
+  {
+    id: "music",
+    label: "The music",
+    controls: ["expmeter", "expbands", "expmetercol", "expmeterw", "expmeterh",
+               "expmeterx", "expmetery", "expgap", "expmirror"],
   },
   {
     id: "behind",
@@ -114,6 +121,37 @@ const bounceTab = (data, was) => `
     <input type="file" id="newsprite" accept="image/png">
   </label>`;
 
+const musicTab = (was) => `
+  <label>draw the music<select id="expmeter">
+    ${METERS.map(([v, t]) => option(v, t, was.meter.kind || "none")).join("")}
+  </select></label>
+  <label data-when="meter">its colour
+    <input type="color" id="expmetercol" value="${hexOf(was.meter.colour, "#ffffff")}">
+  </label>
+  <label data-when="meter">how many bars — <b id="expbandsout">48</b>
+    <input type="range" id="expbands" min="8" max="120" value="${was.meter.bands ?? 48}">
+  </label>
+  <label data-when="meter">space between them — <b id="expgapout">35%</b>
+    <input type="range" id="expgap" min="0" max="80" value="${Math.round((was.meter.gap ?? 0.35) * 100)}">
+  </label>
+  <label data-when="meter">how wide — <b id="expmeterwout">72%</b> of the frame
+    <input type="range" id="expmeterw" min="10" max="100" value="${Math.round((was.meter.width ?? 0.72) * 100)}">
+  </label>
+  <label data-when="meter">how tall — <b id="expmeterhout">13%</b>
+    <input type="range" id="expmeterh" min="2" max="45" value="${Math.round((was.meter.height ?? 0.13) * 100)}">
+  </label>
+  <label data-when="meter">across — <b id="expmeterxout">50%</b>
+    <input type="range" id="expmeterx" min="0" max="100" value="${Math.round((was.meter.x ?? 0.5) * 100)}">
+  </label>
+  <label data-when="meter">down — <b id="expmeteryout">50%</b>
+    <input type="range" id="expmetery" min="0" max="100" value="${Math.round((was.meter.y ?? 0.5) * 100)}">
+  </label>
+  <label class="wide check" data-when="meter">
+    <input type="checkbox" id="expmirror" ${was.meter.mirror === false ? "" : "checked"}>
+    grow both ways from the middle — off stands the bars on a line
+  </label>
+  <p class="wide note">Read from the song itself, so it needs the audio the document names.</p>`;
+
 const behindTab = (data, was) => `
   <label class="wide">what is behind the words<select id="expbehind">
     <option value="">nothing — the preset's own colour</option>
@@ -159,6 +197,7 @@ function panel(data, fonts, was, marginPct) {
     text: textTab(fonts, was),
     place: placeTab(was, marginPct),
     bounce: bounceTab(data, was),
+    music: musicTab(was),
     behind: behindTab(data, was),
     file: fileTab(data, was),
   };
@@ -199,6 +238,15 @@ const settings = () => ({
   outline_width: Number($("#expout").value),
   outline: $("#expoutcol").value,
   shadow: $("#expshadow").value ? $("#expshadowcol").value : null,
+  meter: $("#expmeter").value,
+  bands: Number($("#expbands").value),
+  meter_colour: $("#expmetercol").value,
+  meter_w: Number($("#expmeterw").value) / 100,
+  meter_h: Number($("#expmeterh").value) / 100,
+  meter_x: Number($("#expmeterx").value) / 100,
+  meter_y: Number($("#expmetery").value) / 100,
+  gap: Number($("#expgap").value) / 100,
+  mirror: $("#expmirror").checked,
   behind: $("#expbehind").value,
   fit: $("#expfit").value,
   dim: Number($("#expdim").value) / 100,
@@ -224,6 +272,7 @@ function showWhatApplies() {
   // Two independent modes, so a label says which words it wants to see.
   const on = [$("#expbounce").value];
   if ($("#expbehind").value) on.push("behind");
+  if ($("#expmeter").value !== "none") on.push("meter");
   for (const label of document.querySelectorAll("[data-when]")) {
     label.hidden = !label.dataset.when.split(" ").some((word) => on.includes(word));
   }
@@ -310,6 +359,7 @@ export async function openExport() {
     main: saved.overrides.main || {},
     shadow: saved.overrides.shadow || {},
     background: saved.overrides.background || {},
+    meter: saved.overrides.meter || {},
   };
   const marginPct = was.layout.margin_y != null
     ? Math.round(was.layout.margin_y * 100 / presetHeight(was.preset))
@@ -358,6 +408,12 @@ export async function openExport() {
     $("#expsquashout").textContent = s.squash ? s.squash.toFixed(2) : "off";
     $("#expsizeout").textContent = `${s.size_scale.toFixed(2)}×`;
     $("#expoutout").textContent = s.outline_width ? `${s.outline_width}px` : "none";
+    $("#expbandsout").textContent = String(s.bands);
+    $("#expgapout").textContent = `${Math.round(s.gap * 100)}%`;
+    $("#expmeterwout").textContent = `${Math.round(s.meter_w * 100)}%`;
+    $("#expmeterhout").textContent = `${Math.round(s.meter_h * 100)}%`;
+    $("#expmeterxout").textContent = `${Math.round(s.meter_x * 100)}%`;
+    $("#expmeteryout").textContent = `${Math.round(s.meter_y * 100)}%`;
   };
   for (const id of ALL_CONTROLS) $("#" + id).oninput = refresh;
   refresh();

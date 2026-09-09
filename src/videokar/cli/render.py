@@ -67,6 +67,10 @@ def render_cmd(
     segment: Annotated[
         float | None, typer.Option("--segment", help="Seconds per render segment.")
     ] = None,
+    meter: Annotated[
+        str | None,
+        typer.Option("--meter", help="Draw the music: bars, wave, or none."),
+    ] = None,
     behind: Annotated[
         Path | None,
         typer.Option("--behind", help="A still or a clip to put behind the words."),
@@ -107,6 +111,7 @@ def render_cmd(
                 "sprite_scale": sprite_scale,
             }
         ),
+        "meter": without_none({"kind": meter}),
         # A still or a clip, told apart by the suffix rather than by two flags:
         # there is only ever one thing behind the words.
         "background": without_none(
@@ -133,8 +138,20 @@ def render_cmd(
 
     song = open_song(song_path)
 
+    # Resolved before the renderer is built: the meter needs the audio just as
+    # much as the mux does, and it needs it even for a silent export.
+    found = resolve_audio(song, song_path)
+    spectrum = None
+    if style.meter.kind != "none":
+        if found is None:
+            fail(f"the meter needs the audio, and {song.audio.path!r} could not be found")
+        from ..audio.spectrum import spectrum_for  # noqa: PLC0415
+
+        with console.status("listening to the track…", spinner="dots"):
+            spectrum = spectrum_for(found, fps=float(style.output.rate), bands=style.meter.bands)
+
     try:
-        renderer = FrameRenderer(song, style)
+        renderer = FrameRenderer(song, style, spectrum=spectrum)
     except (FontError, SpriteError, BackgroundError) as exc:
         fail(str(exc))
     if not renderer.cues:
@@ -142,7 +159,7 @@ def render_cmd(
 
     output = style.output
     wants_audio = output.audio and output.format != "png"
-    audio_file = resolve_audio(song, song_path) if wants_audio else None
+    audio_file = found if wants_audio else None
     if wants_audio and audio_file is None:
         console.print(f"[yellow]note:[/yellow] audio {song.audio.path!r} not found, rendering mute")
 

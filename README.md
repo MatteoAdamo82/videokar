@@ -317,6 +317,47 @@ circle again puts the sprite back down.
 The circle has settings of its own: `[ball] colour` and `radius`, both in the
 dialog. `kind = "none"` draws nothing at all, for when the words are enough.
 
+## The music, drawn
+
+Bars or a wave, following the song itself.
+
+```bash
+videokar render song.json --meter bars
+videokar render song.json --meter wave
+```
+
+Drawn here, in Pillow, rather than by one of ffmpeg's own filters. The filters
+draw whatever they draw: their size, their placement and their colours are not
+really ours to choose, which is how an earlier attempt at this ended up
+off-centre and clipped at the edges. A few rectangles are not much code, and
+every pixel of them is decided in one file.
+
+```toml
+[meter]
+kind = "bars"     # bars, wave, or none
+bands = 48
+colour = "#ffffffd2"
+x = 0.5           # its centre, as a fraction of the frame
+y = 0.5
+width = 0.72      # so the same numbers hold at 1080p and in a vertical short
+height = 0.13
+gap = 0.35        # space between bars, as a share of the room each one gets
+mirror = true     # grow both ways from the middle
+```
+
+Three things decide whether it looks like music rather than noise. The bands
+are spaced logarithmically, because an FFT's linear bins put the whole of the
+bass into the first bar and give forty bars to the hiss above 10kHz. The
+magnitudes are in decibels, because loudness is logarithmic and on a linear
+scale everything but the kick drum lies flat. And the bars rise fast and fall
+slowly, because a bar that drops the instant the note does reads as flicker
+rather than as a beat.
+
+It reads the audio the document names, so that file has to be there — said
+before the render starts rather than a minute into it. The analysis is cached
+beside the track: four minutes takes a fifth of a second, and only the first
+frame drawn pays for it.
+
 ## Something behind the words
 
 A still or a clip, for when the video is the finished thing rather than an
