@@ -134,6 +134,8 @@ def preview_frame(
     anchor: str | None = None,
     margin_y: int | None = None,
     margin_x: int | None = None,
+    text_x: float | None = None,
+    text_y: float | None = None,
     paren_scale: float | None = None,
     sprite: str | None = None,
     sprite_scale: float | None = None,
@@ -168,6 +170,10 @@ def preview_frame(
         overrides["layout"]["margin_y"] = margin_y
     if margin_x is not None:
         overrides["layout"]["margin_x"] = margin_x
+    if text_x is not None:
+        overrides["layout"]["x"] = text_x
+    if text_y is not None:
+        overrides["layout"]["y"] = text_y
     if paren_scale is not None:
         overrides["paren"]["scale"] = paren_scale
     if font or font_size is not None:
@@ -207,7 +213,8 @@ def preview_frame(
     from ...render.sprites import SpriteError  # noqa: PLC0415
 
     try:
-        frame = FrameRenderer(song, style, spectrum=_spectrum_for(session, path, style)).frame(at)
+        renderer = FrameRenderer(song, style, spectrum=_spectrum_for(session, path, style))
+        frame = renderer.frame(at)
     except (SpriteError, BackgroundError) as exc:
         # A background on a transparent preset is the common one, and the
         # message says which presets do take one.
@@ -221,7 +228,14 @@ def preview_frame(
     flat = flat.resize((width, height), Image.LANCZOS)
     buffer = io.BytesIO()
     flat.save(buffer, format="PNG")
-    return Response(buffer.getvalue(), media_type="image/png")
+    return Response(
+        buffer.getvalue(),
+        media_type="image/png",
+        # Where each thing ended up, so the page can put a handle over it and
+        # let it be dragged. Fractions of the frame: the preview is scaled to
+        # whatever width fits, and these are the units the settings use.
+        headers={"X-Videokar-Boxes": json.dumps(renderer.boxes(at))},
+    )
 
 
 @router.api_route("/output/{name}", methods=["GET", "HEAD"])

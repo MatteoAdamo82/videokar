@@ -204,7 +204,8 @@ function panel(data, fonts, was, marginPct) {
   return `
     <h1>Export</h1>
     <p>Rendered next to the document, then offered as a download.</p>
-    <img id="preview" class="preview" alt="preview">
+    <div id="stage" class="stage"><img id="preview" class="preview" alt="preview"></div>
+    <p class="hint">Drag the words or the meter to place them.</p>
     <div class="tabs" role="tablist">
       ${TABS.map((tab, i) =>
         `<button role="tab" data-tab="${tab.id}" class="${i ? "" : "on"}">${tab.label}</button>`).join("")}
@@ -219,12 +220,18 @@ function panel(data, fonts, was, marginPct) {
     <div id="jobs"></div>`;
 }
 
+// Where a drag has put things. Null means nobody has dragged it and the
+// anchor, or the section's own default, still decides.
+const placed = {text_x: null, text_y: null, meter_x: null, meter_y: null};
+
 const settings = () => ({
   preset: $("#expreset").value,
   anchor: $("#expanchor").value,
   // A percentage of the frame, so the same choice holds at any resolution.
   margin_pct: Number($("#expmargin").value),
   paren_scale: Number($("#expparen").value) / 100,
+  text_x: placed.text_x ?? 0.5,
+  text_y: placed.text_y,
   bounce: $("#expbounce").value,
   sprite: $("#expsprite").value,
   sprite_scale: Number($("#expspritescale").value) / 100,
@@ -243,8 +250,8 @@ const settings = () => ({
   meter_colour: $("#expmetercol").value,
   meter_w: Number($("#expmeterw").value) / 100,
   meter_h: Number($("#expmeterh").value) / 100,
-  meter_x: Number($("#expmeterx").value) / 100,
-  meter_y: Number($("#expmetery").value) / 100,
+  meter_x: placed.meter_x ?? Number($("#expmeterx").value) / 100,
+  meter_y: placed.meter_y ?? Number($("#expmetery").value) / 100,
   gap: Number($("#expgap").value) / 100,
   mirror: $("#expmirror").checked,
   behind: $("#expbehind").value,
@@ -340,6 +347,86 @@ function wireUploads(data, refresh) {
   };
 }
 
+const HANDLES = {
+  words: "the words",
+  meter: "the meter",
+};
+
+// One handle per thing the frame reports, laid over the preview at the same
+// fractions. Rebuilt on every redraw, because what is on screen has moved.
+function layHandles(boxes) {
+  const stage = $("#stage");
+  stage.querySelectorAll(".handle").forEach((old) => old.remove());
+  for (const [name, label] of Object.entries(HANDLES)) {
+    const box = boxes[name];
+    if (!box) continue;
+    const handle = document.createElement("div");
+    handle.className = "handle";
+    handle.dataset.what = name;
+    handle.title = `drag ${label}`;
+    const [x, y, w, h] = box;
+    Object.assign(handle.style, {
+      left: `${x * 100}%`,
+      top: `${y * 100}%`,
+      width: `${w * 100}%`,
+      height: `${h * 100}%`,
+    });
+    stage.append(handle);
+  }
+}
+
+function wireDragging(refresh) {
+  const stage = $("#stage");
+  let drag = null;
+
+  stage.addEventListener("mousedown", (event) => {
+    const handle = event.target.closest(".handle");
+    if (!handle) return;
+    event.preventDefault();
+    const frame = $("#preview").getBoundingClientRect();
+    const box = handle.getBoundingClientRect();
+    drag = {
+      what: handle.dataset.what,
+      frame,
+      // Grab it where it was taken hold of, so it does not jump to the cursor.
+      offsetX: (box.left + box.width / 2 - event.clientX) / frame.width,
+      offsetY: (box.top + box.height / 2 - event.clientY) / frame.height,
+      handle,
+    };
+    handle.classList.add("dragging");
+  });
+
+  window.addEventListener("mousemove", (event) => {
+    if (!drag) return;
+    const x = clamp((event.clientX - drag.frame.left) / drag.frame.width + drag.offsetX);
+    const y = clamp((event.clientY - drag.frame.top) / drag.frame.height + drag.offsetY);
+    if (drag.what === "words") {
+      placed.text_x = round3(x);
+      placed.text_y = round3(y);
+    } else {
+      placed.meter_x = round3(x);
+      placed.meter_y = round3(y);
+      $("#expmeterx").value = Math.round(x * 100);
+      $("#expmetery").value = Math.round(y * 100);
+    }
+    // Move the handle now and let the frame catch up: the redraw is debounced,
+    // and a handle that lags the cursor feels broken.
+    drag.handle.style.left = `${(x - drag.handle.offsetWidth / drag.frame.width / 2) * 100}%`;
+    drag.handle.style.top = `${(y - drag.handle.offsetHeight / drag.frame.height / 2) * 100}%`;
+    refresh();
+  });
+
+  window.addEventListener("mouseup", () => {
+    if (!drag) return;
+    drag.handle.classList.remove("dragging");
+    drag = null;
+    refresh();
+  });
+}
+
+const clamp = (v) => Math.min(1, Math.max(0, v));
+const round3 = (v) => Math.round(v * 1000) / 1000;
+
 export async function openExport() {
   let data, saved, fonts;
   try {
@@ -371,26 +458,38 @@ export async function openExport() {
     ? Math.round((was.ball.radius / (savedSize * 0.25)) * 100)
     : 100;
 
+  placed.text_x = was.layout.x ?? null;
+  placed.text_y = was.layout.y ?? null;
+  placed.meter_x = null;
+  placed.meter_y = null;
   openSheet(panel(data, fonts, was, marginPct));
   if (saved.saved) $("#savedto").textContent = `remembered in ${saved.path}`;
   wireTabs();
 
-  const drawPreview = () => {
-    const image = $("#preview");
+  // Fetched rather than set as a src: the answer carries the boxes each thing
+  // ended up in, which is what the handles are laid over — and when it is a
+  // refusal instead, the reason is in the body rather than nowhere.
+  let showing = null;
+  const drawPreview = async () => {
     const url = "/api/frame?" + previewQuery(settings(), previewTime());
-    // An <img> that fails says nothing about why. The reason is in the body the
-    // server sent, so on failure ask again and read it — a refused setting is
-    // usually a sentence explaining what to pick instead.
-    image.onerror = async () => {
-      try {
-        const answer = await fetch(url);
-        const detail = (await answer.json()).detail;
-        say(detail || "the preview could not be drawn", "bad");
-      } catch {
-        say("the preview could not be drawn", "bad");
-      }
-    };
-    image.src = url;
+    let answer;
+    try {
+      answer = await fetch(url);
+    } catch {
+      return say("the preview could not be drawn", "bad");
+    }
+    if (!answer.ok) {
+      let detail = "the preview could not be drawn";
+      try { detail = (await answer.json()).detail || detail; } catch {}
+      return say(detail, "bad");
+    }
+    const blob = await answer.blob();
+    if (showing) URL.revokeObjectURL(showing);
+    showing = URL.createObjectURL(blob);
+    $("#preview").src = showing;
+    let boxes = {};
+    try { boxes = JSON.parse(answer.headers.get("X-Videokar-Boxes") || "{}"); } catch {}
+    layHandles(boxes);
   };
 
   let previewTimer = null;
@@ -416,6 +515,13 @@ export async function openExport() {
     $("#expmeteryout").textContent = `${Math.round(s.meter_y * 100)}%`;
   };
   for (const id of ALL_CONTROLS) $("#" + id).oninput = refresh;
+  // A slider moved by hand is a decision: it takes the position back from
+  // wherever a drag had put it.
+  $("#expmeterx").addEventListener("input", () => { placed.meter_x = null; });
+  $("#expmetery").addEventListener("input", () => { placed.meter_y = null; });
+  $("#expanchor").addEventListener("input", () => { placed.text_y = null; });
+  $("#expmargin").addEventListener("input", () => { placed.text_y = null; });
+  wireDragging(refresh);
   refresh();
 
   wireUploads(data, refresh);

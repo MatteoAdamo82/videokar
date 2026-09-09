@@ -119,7 +119,12 @@ def layout_line(line: Line, style: TextStyle, layout: Layout, output: Output) ->
     block_height = row_height * len(rows)
 
     inset_y = int(output.height * layout.safe_area)
-    if layout.anchor == "top":
+    if layout.y is not None:
+        # An exact place, which is what a drag in the preview writes. It wins
+        # over the anchor rather than being averaged with it: two ways of saying
+        # where something goes, and the more specific one is the answer.
+        top = output.height * layout.y - block_height / 2
+    elif layout.anchor == "top":
         top = inset_y + margin_y
     elif layout.anchor == "center":
         top = (output.height - block_height) / 2
@@ -136,7 +141,10 @@ def layout_line(line: Line, style: TextStyle, layout: Layout, output: Output) ->
     for row_index, row in enumerate(rows):
         widths = [_advance(font, texts[i]) for i in row]
         row_width = sum(widths) + space * (len(row) - 1)
-        x = (output.width - row_width) / 2
+        # Centred on layout.x rather than on the frame, and held inside the safe
+        # area: dragged to an edge the words stop at it instead of leaving.
+        x = output.width * layout.x - row_width / 2
+        x = min(max(x, inset_x), max(inset_x, output.width - inset_x - row_width))
         y = top + row_index * row_height
         for offset, word_index in enumerate(row):
             placed.append(

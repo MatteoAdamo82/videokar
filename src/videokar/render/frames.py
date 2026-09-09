@@ -20,6 +20,7 @@ from .ball import ball_position
 from .circle import draw_ball
 from .layout import LineLayout, layout_line
 from .meter import draw as draw_meter
+from .meter import geometry as meter_geometry
 from .sprites import SpriteError, load_sprite
 
 
@@ -169,6 +170,41 @@ class FrameRenderer:
             return None
         cue = self.cues[index]
         return cue if time < cue.leaves else None
+
+    def boxes(self, time: float) -> dict[str, tuple[float, float, float, float]]:
+        """Where each thing sits, as fractions of the frame.
+
+        Fractions rather than pixels because the caller is a preview scaled to
+        whatever width fits on screen, and because the settings these boxes are
+        dragged into are fractions themselves.
+        """
+        output = self.style.output
+        found: dict[str, tuple[float, float, float, float]] = {}
+
+        if self.style.meter.kind != "none" and self.spectrum is not None:
+            where = meter_geometry(self.style.meter, (output.width, output.height))
+            top = where.centre_y - where.reach
+            height = where.reach * (2 if self.style.meter.mirror else 1)
+            found["meter"] = (
+                where.left / output.width,
+                top / output.height,
+                where.width / output.width,
+                height / output.height,
+            )
+
+        cue = self.cue_at(time)
+        if cue is not None and cue.layout.words:
+            left = min(word.x for word in cue.layout.words)
+            right = max(word.x + word.width for word in cue.layout.words)
+            top = min(word.y for word in cue.layout.words)
+            bottom = max(word.y + word.height for word in cue.layout.words)
+            found["words"] = (
+                left / output.width,
+                top / output.height,
+                (right - left) / output.width,
+                (bottom - top) / output.height,
+            )
+        return found
 
     def frame(self, time: float) -> Image.Image:
         output = self.style.output

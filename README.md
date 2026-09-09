@@ -317,6 +317,30 @@ circle again puts the sprite back down.
 The circle has settings of its own: `[ball] colour` and `radius`, both in the
 dialog. `kind = "none"` draws nothing at all, for when the words are enough.
 
+## Putting things where you want them
+
+Drag the words or the meter in the preview. A dashed box sits over each one at
+exactly where the renderer put it — the frame comes back with those boxes in a
+header, so the handle is over the thing itself rather than over a guess made in
+the browser — and dropping it writes the position back.
+
+```toml
+[layout]
+x = 0.25    # the middle of the words, across the frame
+y = 0.22    # and down it — empty leaves it to the anchor below
+anchor = "bottom"
+margin_y = 119
+```
+
+`x` is new and defaults to a half, which is where the words always were. `y` is
+empty until something sets it: with it empty the anchor and the margin decide,
+which is what the presets do, and setting it — which is what a drag does —
+overrides both. Moving the anchor or the margin slider afterwards takes the
+position back.
+
+Dragged to an edge the words stop inside the safe area rather than leaving the
+picture, and the meter is held inside the frame the same way.
+
 ## The music, drawn
 
 Bars or a wave, following the song itself.

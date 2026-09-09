@@ -82,6 +82,10 @@ export const overridesFrom = (s, fps, audio) => ({
   layout: {
     anchor: s.anchor,
     margin_y: Math.round(presetHeight(s.preset) * s.margin_pct / 100),
+    x: s.text_x,
+    // Null while the words are placed by the anchor, which is what the presets
+    // do; a number once they have been dragged, which then wins.
+    y: s.text_y,
   },
   main: {
     ...lookOf(s).main,
@@ -109,6 +113,8 @@ export function previewQuery(s, at) {
     margin_y: Math.round(height * s.margin_pct / 100),
     paren_scale: s.paren_scale,
   });
+  query.set("text_x", s.text_x);
+  if (s.text_y !== null) query.set("text_y", s.text_y);
   if (s.bounce === "sprite" && s.sprite) {
     query.set("sprite", s.sprite);
     query.set("sprite_scale", s.sprite_scale);

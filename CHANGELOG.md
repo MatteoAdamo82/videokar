@@ -414,3 +414,14 @@ All notable changes to this project are documented here. The format follows
   and `showvolume`, which is what the removed version used: those filters
   decide their own size, placement and colours, which is why that version was
   off-centre and clipped and had to go.
+
+- The words and the meter can be dragged in the preview. The frame comes back
+  with the box each thing ended up in, as fractions of the frame, so the handle
+  sits over the thing itself rather than over a guess made in the browser.
+  `[layout] x` is new — the middle of the words across the frame, defaulting to
+  the half they were always at — and `[layout] y` is an exact vertical place
+  that overrides the anchor and the margin when it is set. Moving the anchor or
+  the margin afterwards takes the position back.
+- The preview is fetched rather than assigned to an `<img>` src, which is what
+  makes the boxes readable — and means a refusal arrives with its reason
+  instead of as a broken image.

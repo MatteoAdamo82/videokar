@@ -108,3 +108,38 @@ def test_a_large_margin_still_moves_the_words_up():
     low = lay(["one"], layout=Layout(anchor="bottom", margin_y=50, safe_area=0.0))
     high = lay(["one"], layout=Layout(anchor="bottom", margin_y=400, safe_area=0.0))
     assert high.words[0].y < low.words[0].y
+
+
+def test_the_words_can_be_placed_across_the_frame():
+    # layout.x is the middle of the block, which is what a drag in the preview
+    # writes back. Half is centred, which is where they always were.
+    def middle(x):
+        placed = lay(["ciao", "mondo"], layout=Layout(x=x, safe_area=0.0))
+        left = min(word.x for word in placed.words)
+        right = max(word.x + word.width for word in placed.words)
+        return (left + right) / 2 / OUTPUT.width
+
+    assert middle(0.5) == pytest.approx(0.5, abs=0.01)
+    assert middle(0.25) < middle(0.5) < middle(0.75)
+
+
+def test_the_words_are_held_inside_the_safe_area():
+    # Dragged to an edge they stop at it rather than leaving the picture.
+    for x in (0.0, 1.0):
+        placed = lay(["una", "riga", "lunga"], layout=Layout(x=x, safe_area=0.05))
+        assert min(word.x for word in placed.words) >= OUTPUT.width * 0.05 - 1
+        assert max(word.x + word.width for word in placed.words) <= OUTPUT.width * 0.95 + 1
+
+
+def test_an_exact_vertical_place_beats_the_anchor():
+    # Two ways of saying where something goes; the more specific one answers.
+    anchored = lay(["ciao"], layout=Layout(anchor="bottom", margin_y=20, safe_area=0.0))
+    exact = lay(["ciao"], layout=Layout(anchor="bottom", margin_y=20, y=0.2, safe_area=0.0))
+    assert min(w.y for w in anchored.words) > OUTPUT.height * 0.6
+    assert min(w.y for w in exact.words) / OUTPUT.height == pytest.approx(0.2, abs=0.06)
+
+
+def test_without_an_exact_place_the_anchor_still_decides():
+    top = lay(["ciao"], layout=Layout(anchor="top", safe_area=0.0))
+    bottom = lay(["ciao"], layout=Layout(anchor="bottom", safe_area=0.0))
+    assert min(w.y for w in top.words) < min(w.y for w in bottom.words)

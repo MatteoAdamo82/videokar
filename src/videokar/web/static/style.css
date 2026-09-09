@@ -136,8 +136,16 @@
   .job { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-top: 8px; }
   .bar { height: 5px; background: #14131c; border-radius: 3px; overflow: hidden; margin-top: 7px; }
   .bar i { display: block; height: 100%; background: #6f8bff; width: 0; transition: width .2s; }
-  .preview { display: block; width: 100%; border-radius: 8px; margin: 12px 0 4px;
+  .stage { position: relative; margin: 12px 0 4px; }
+  .preview { display: block; width: 100%; border-radius: 8px;
              background: #0d0c14; border: 1px solid var(--line); }
+  /* Laid over what the frame reports, at the same fractions, so what is grabbed
+     is where the thing actually is rather than a guess made in the browser. */
+  .handle { position: absolute; border: 1px dashed #ffffff55; border-radius: 4px;
+            cursor: grab; background: #ffffff08; }
+  .handle:hover { border-color: #6f8bff; background: #6f8bff1f; }
+  .handle.dragging { cursor: grabbing; border-style: solid; border-color: #6f8bff; }
+  .hint { font-size: 11px; color: var(--dim); margin: 0 0 4px; }
   input[type=range] { width: 100%; accent-color: #6f8bff; }
   /* Feedback for something done inside the sheet belongs inside the sheet. The
      status bar is in the far corner of a window covered by a modal. */

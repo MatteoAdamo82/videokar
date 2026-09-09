@@ -330,6 +330,25 @@ class BallStyle:
 @dataclass(frozen=True)
 class Layout:
     anchor: Anchor = "bottom"
+    x: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "The middle of the words, across the frame. A half is centred, which is "
+            "where they were before this existed."
+        ),
+    )
+    y: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "The middle of the words, down the frame. Empty leaves it to the anchor "
+            "and the margin below, which is what the presets use; setting it — which "
+            "is what dragging in the preview does — overrides both."
+        ),
+    )
     margin_x: int | None = Field(
         default=None, ge=0, le=2000, description="Empty is a twentieth of the frame width."
     )

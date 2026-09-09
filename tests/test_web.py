@@ -1055,3 +1055,56 @@ def test_a_render_with_a_meter_is_refused_before_the_job_starts(client):
     )
     assert response.status_code == 422
     assert "meter needs the audio" in response.json()["detail"]
+
+
+def test_the_preview_reports_where_it_put_things(client, with_audio):
+    import json
+
+    response = client.get(
+        "/api/frame",
+        params={
+            "at": 20.5,
+            "preset": "youtube",
+            "width": 200,
+            "extra": json.dumps({"meter": {"kind": "bars"}}),
+        },
+    )
+    assert response.status_code == 200
+    boxes = json.loads(response.headers["X-Videokar-Boxes"])
+    # Fractions of the frame, because the preview on screen is some other size
+    # and because these are the units the settings are written in.
+    for name in ("words", "meter"):
+        x, y, width, height = boxes[name]
+        assert 0.0 <= x <= 1.0 and 0.0 <= y <= 1.0, name
+        assert 0.0 < width <= 1.0 and 0.0 < height <= 1.0, name
+        assert x + width <= 1.001, name
+
+
+def test_a_frame_with_no_meter_reports_no_meter(client):
+    import json
+
+    response = client.get("/api/frame", params={"at": 20.5, "width": 120})
+    boxes = json.loads(response.headers["X-Videokar-Boxes"])
+    assert "meter" not in boxes
+    assert "words" in boxes
+
+
+def test_dragging_the_words_moves_where_they_are_drawn(client):
+    import json
+
+    def middle(x, y):
+        response = client.get(
+            "/api/frame", params={"at": 20.5, "width": 120, "text_x": x, "text_y": y}
+        )
+        assert response.status_code == 200
+        left, top, width, height = json.loads(response.headers["X-Videokar-Boxes"])["words"]
+        return (left + width / 2, top + height / 2)
+
+    # What comes back is where it was asked to go, which is what makes a drag
+    # land under the cursor rather than near it.
+    across, down = middle(0.25, 0.3)
+    assert across == pytest.approx(0.25, abs=0.02)
+    assert down == pytest.approx(0.3, abs=0.05)
+
+    other_across, _ = middle(0.75, 0.3)
+    assert other_across > across
