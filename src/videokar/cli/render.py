@@ -14,6 +14,13 @@ import typer
 from .common import console, fail, open_song, resolve_audio, without_none
 from .root import app
 
+# Everything Pillow reads as a still; anything else goes to ffmpeg as a clip.
+PICTURES = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff", ".gif"}
+
+
+def _is_picture(path: Path) -> bool:
+    return path.suffix.lower() in PICTURES
+
 
 @app.command("render")
 def render_cmd(
@@ -60,10 +67,19 @@ def render_cmd(
     segment: Annotated[
         float | None, typer.Option("--segment", help="Seconds per render segment.")
     ] = None,
+    behind: Annotated[
+        Path | None,
+        typer.Option("--behind", help="A still or a clip to put behind the words."),
+    ] = None,
+    dim: Annotated[
+        float | None,
+        typer.Option("--dim", help="Darken the background this much, 0 to 1."),
+    ] = None,
 ) -> None:
     """Draw the karaoke overlay and encode it."""
     from ..config import ConfigError, resolve_style
     from ..render import CODECS, EncodeError, FontError, FrameRenderer
+    from ..render.background import BackgroundError
     from ..render.encode import render_png_sequence, render_segmented
     from ..render.sprites import SpriteError
 
@@ -91,6 +107,15 @@ def render_cmd(
                 "sprite_scale": sprite_scale,
             }
         ),
+        # A still or a clip, told apart by the suffix rather than by two flags:
+        # there is only ever one thing behind the words.
+        "background": without_none(
+            {
+                "image": str(behind) if behind and _is_picture(behind) else None,
+                "video": str(behind) if behind and not _is_picture(behind) else None,
+                "dim": dim,
+            }
+        ),
     }
 
     try:
@@ -110,7 +135,7 @@ def render_cmd(
 
     try:
         renderer = FrameRenderer(song, style)
-    except (FontError, SpriteError) as exc:
+    except (FontError, SpriteError, BackgroundError) as exc:
         fail(str(exc))
     if not renderer.cues:
         fail("nothing to draw — every line is unsung or untimed")
@@ -145,6 +170,7 @@ def render_cmd(
                     start=0.0,
                     end=song.audio.duration,
                     audio_path=audio_file,
+                    background=style.background,
                     on_segment=progress,
                 )
     except (EncodeError, OSError) as exc:

@@ -372,3 +372,12 @@ All notable changes to this project are documented here. The format follows
   the way out of the mode. It is always in the tab now, and adding a PNG
   selects it — putting a file in the folder and changing nothing on screen
   reads as the upload having failed.
+
+### Added
+
+- A background behind the words: a still, fitted and darkened once so every
+  frame starts from it, or a clip, composited by ffmpeg while encoding.
+  `videokar render --behind FILE --dim 0.4`, or a `[background]` section with
+  `image`/`video`, `loop`, `fit` and `dim`. A short clip repeats, and carries on
+  across a segment boundary rather than restarting at it. A background on a
+  transparent export is a contradiction and is refused before the render.

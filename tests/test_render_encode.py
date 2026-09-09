@@ -1,7 +1,11 @@
+import subprocess
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
 import pytest
 from PIL import Image
 
-from videokar.config.schema import Output
+from videokar.config.schema import Background, Output
 from videokar.render.encode import (
     CODECS,
     EncodeError,
@@ -135,3 +139,103 @@ def test_the_lossless_formats_are_smaller_than_prores(tmp_path):
         sizes[fmt] = destination.stat().st_size
     assert sizes["animation"] < sizes["prores4444"]
     assert sizes["png_mov"] < sizes["prores4444"]
+
+
+@pytest.fixture
+def two_second_clip(tmp_path):
+    """A green second then a yellow one, so a loop and a seam are both visible.
+
+    The rate is set on each source rather than on the output: two 25fps sources
+    resampled to 10 on the way out come to 2.2 seconds, not 2, and every
+    expectation below would then be off by the difference.
+    """
+    path = tmp_path / "clip.mp4"
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-y",
+         "-f", "lavfi", "-i", "color=c=green:s=64x64:d=1:r=10",
+         "-f", "lavfi", "-i", "color=c=yellow:s=64x64:d=1:r=10",
+         "-filter_complex", "[0:v][1:v]concat=n=2:v=1[v]", "-map", "[v]",
+         str(path)],
+        check=True,
+    )  # fmt: skip
+    return path
+
+
+def _colour_at(video: Path, when: float) -> str:
+    """green, yellow or something else, sampled from one frame of a video.
+
+    The seek goes after the input, not before it: seeking before decoding jumps
+    to the nearest keyframe, which on a flat-colour clip can be a whole second
+    away and makes this read the wrong second entirely.
+    """
+    with TemporaryDirectory() as workdir:
+        shot = Path(workdir) / "f.png"
+        subprocess.run(
+            ["ffmpeg", "-v", "error", "-y", "-i", str(video), "-ss", f"{when}",
+             "-frames:v", "1", str(shot)],
+            check=True,
+        )  # fmt: skip
+        with Image.open(shot) as image:
+            red, green, blue = image.convert("RGB").getpixel((8, 8))
+    if green > 100 and red < 100:
+        return "green"
+    if red > 100 and green > 100:
+        return "yellow"
+    return f"({red},{green},{blue})"
+
+
+@needs_ffmpeg
+def test_a_clip_shows_through_the_overlay(tmp_path, two_second_clip):
+    # The frames handed to the encoder are see-through; if they were flattened
+    # onto the preset's colour first the clip would be hidden completely.
+    clear = [Image.new("RGBA", (64, 64), (0, 0, 0, 0)) for _ in range(10)]
+    output = Output(width=64, height=64, fps=10, format="mp4")
+    result = render_frames(
+        iter(clear),
+        tmp_path / "over.mp4",
+        output,
+        background=Background(video=str(two_second_clip)),
+    )
+    assert _colour_at(result, 0.5) == "green"
+
+
+@needs_ffmpeg
+def test_a_short_clip_repeats_under_a_longer_song(tmp_path, two_second_clip):
+    clear = (Image.new("RGBA", (64, 64), (0, 0, 0, 0)) for _ in range(60))
+    output = Output(width=64, height=64, fps=10, format="mp4")
+    result = render_frames(
+        clear,
+        tmp_path / "loop.mp4",
+        output,
+        background=Background(video=str(two_second_clip)),
+    )
+    # Six seconds of frames over a two-second clip: three times round.
+    assert [_colour_at(result, t) for t in (0.5, 1.5, 2.5, 5.5)] == [
+        "green", "yellow", "green", "yellow",
+    ]
+
+
+@needs_ffmpeg
+def test_the_clip_carries_on_across_a_segment_seam(tmp_path, two_second_clip):
+    output = Output(width=64, height=64, fps=10, format="mp4", segment_seconds=1.5)
+    result = render_segmented(
+        lambda _: Image.new("RGBA", (64, 64), (0, 0, 0, 0)),
+        tmp_path / "seams.mp4",
+        output,
+        start=0.0,
+        end=6.0,
+        background=Background(video=str(two_second_clip)),
+    )
+    # Seams at 1.5, 3.0 and 4.5; the clip must not restart at any of them.
+    assert [_colour_at(result, t) for t in (1.6, 3.2, 4.6)] == ["yellow", "yellow", "green"]
+
+
+@needs_ffmpeg
+def test_a_clip_that_is_not_there_says_so(tmp_path):
+    with pytest.raises(EncodeError, match="is not there"):
+        render_frames(
+            iter([Image.new("RGBA", (32, 32), (0, 0, 0, 0))]),
+            tmp_path / "x.mp4",
+            Output(width=32, height=32, fps=10, format="mp4"),
+            background=Background(video=str(tmp_path / "missing.mp4")),
+        )

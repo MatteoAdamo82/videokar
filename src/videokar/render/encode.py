@@ -22,7 +22,7 @@ from tempfile import TemporaryDirectory
 from PIL import Image
 
 from ..audio.io import require_ffmpeg
-from ..config.schema import Output
+from ..config.schema import Background, Output
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +72,62 @@ def _flatten(frame: Image.Image, background: tuple[int, int, int, int]) -> Image
     return base
 
 
+def _background_args(
+    background: Background, output: Output, offset: float
+) -> tuple[list[str], list[str]]:
+    """ffmpeg's inputs and filter for a clip behind the overlay.
+
+    Composited here rather than in Pillow: ffmpeg is already in the pipeline and
+    already decodes video, and pulling frames into Python to paste them one at a
+    time would be the slow way round.
+
+    The offset is taken with `trim`, not by seeking the input. Seeking into a
+    stream that is also being looped does not land where the arithmetic says it
+    should, and the drift only shows up segments later, as a background that
+    slips further out of step the longer the song runs. Trimming costs the
+    decode of the frames it throws away, which for a short clip is nothing next
+    to drawing the frames themselves.
+    """
+    clip = Path(background.video)
+    if not clip.is_file():
+        raise EncodeError(f"the background video {clip.name} is not there")
+
+    inputs = ["-stream_loop", "-1"] if background.loop else []
+    inputs += ["-i", str(clip)]
+
+    steps = []
+    if not background.loop:
+        # Hold the last frame rather than running out and leaving black.
+        steps.append("tpad=stop=-1:stop_mode=clone")
+    if offset:
+        steps += [f"trim=start={offset:.3f}", "setpts=PTS-STARTPTS"]
+    steps.append(
+        {
+            "cover": (
+                f"scale={output.width}:{output.height}:force_original_aspect_ratio=increase,"
+                f"crop={output.width}:{output.height}"
+            ),
+            "contain": (
+                f"scale={output.width}:{output.height}:force_original_aspect_ratio=decrease,"
+                f"pad={output.width}:{output.height}:-1:-1:color=black"
+            ),
+            "stretch": f"scale={output.width}:{output.height}",
+        }[background.fit]
+    )
+    if background.dim:
+        keep = 1 - background.dim
+        steps.append(f"colorchannelmixer=rr={keep}:gg={keep}:bb={keep}")
+    steps.append("setsar=1")
+
+    chain = (
+        f"[1:v]{','.join(steps)}[bg];"
+        # shortest: the overlay is exactly as long as the song, and without this
+        # a looping clip would keep the encoder running for ever.
+        "[bg][0:v]overlay=shortest=1,format=yuv420p[v]"
+    )
+    return inputs, ["-filter_complex", chain, "-map", "[v]"]
+
+
 def render_frames(
     frames: Iterator[Image.Image],
     destination: Path,
@@ -80,11 +136,18 @@ def render_frames(
     audio_path: Path | None = None,
     audio_offset: float = 0.0,
     mux_audio: bool = True,
+    background: Background | None = None,
+    background_offset: float = 0.0,
 ) -> Path:
     """Pipe frames into one ffmpeg process and write a single file."""
     require_ffmpeg()
     codec = CODECS[output.format]
     keep_alpha = codec.keeps_alpha and output.background[3] < 255
+    behind = background if background and background.video else None
+    if behind:
+        # The frames are drawn see-through so the clip shows; flattening them
+        # onto the preset's colour first would hide it completely.
+        keep_alpha = True
 
     command = [
         "ffmpeg", "-y", "-loglevel", "error",
@@ -93,13 +156,21 @@ def render_frames(
         "-r", f"{output.rate.numerator}/{output.rate.denominator}",
         "-i", "-",
     ]  # fmt: skip
+    # The clip is input 1, so the audio that used to be it becomes input 2.
+    filters: list[str] = []
+    if behind:
+        clip_inputs, filters = _background_args(behind, output, background_offset)
+        command += clip_inputs
+    audio_input = 2 if behind else 1
     if audio_path is not None:
         command += ["-ss", f"{audio_offset:.3f}", "-i", str(audio_path)]
-    if audio_path is not None and mux_audio:
+    if filters:
+        command += filters
+    elif audio_path is not None and mux_audio:
         command += ["-map", "0:v:0"]
     command += codec.args
     if audio_path is not None and mux_audio:
-        command += ["-c:a", "aac", "-b:a", "192k", "-map", "1:a:0", "-shortest"]
+        command += ["-c:a", "aac", "-b:a", "192k", "-map", f"{audio_input}:a:0", "-shortest"]
     command.append(str(destination))
 
     process = subprocess.Popen(command, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -168,6 +239,7 @@ def render_segmented(
     start: float,
     end: float,
     audio_path: Path | None = None,
+    background: Background | None = None,
     on_segment: Callable[[int, int], None] | None = None,
 ) -> Path:
     """Render [start, end) in segments and concatenate them.
@@ -194,6 +266,8 @@ def render_segmented(
             output,
             audio_path=audio_path,
             audio_offset=start,
+            background=background,
+            background_offset=start,
         )
 
     with TemporaryDirectory(prefix="videokar-segments-") as workdir:
@@ -208,7 +282,15 @@ def render_segmented(
             # Audio is muxed once, onto the concatenated result: a per-segment
             # mux would re-encode the same audio a dozen times and put an AAC
             # priming delay at every seam.
-            render_frames(frames, part, output)
+            # Each segment seeks the clip to where it actually begins, so the
+            # background carries on across a seam rather than restarting at it.
+            render_frames(
+                frames,
+                part,
+                output,
+                background=background,
+                background_offset=segment_start / rate,
+            )
             parts.append(part)
             if on_segment:
                 on_segment(number, len(boundaries))

@@ -14,6 +14,7 @@ from PIL import Image, ImageDraw, ImageFilter
 
 from ..config.schema import RGBA, Ball, Shadow, Style, resolved_ball, resolved_shadow
 from ..project.model import Line, Song
+from .background import BackgroundError, base_frame
 from .ball import ball_position
 from .circle import draw_ball
 from .layout import LineLayout, layout_line
@@ -70,6 +71,19 @@ class FrameRenderer:
             # Fail here rather than on the first frame that wants it, which
             # would be minutes into a render.
             load_sprite(self.style.ball.sprite, 32)
+        has_background = self.style.background.image or self.style.background.video
+        if has_background and self.style.output.background[3] < 255:
+            # A picture behind the words and a transparent export are a
+            # contradiction. Said here rather than after the render, which would
+            # hand back a file with the background quietly missing.
+            raise BackgroundError(
+                "a background needs somewhere to sit — this preset exports a "
+                "transparent overlay. Use youtube or shorts, or --opaque."
+            )
+        if self.style.background.image:
+            # Read once here rather than on the first frame that wants it, which
+            # would be minutes into a render.
+            base_frame(self.style.background, (1, 1), self.style.output.background)
         self.cues = self._build_cues()
         self._starts = [cue.appears for cue in self.cues]
 
@@ -153,7 +167,9 @@ class FrameRenderer:
 
     def frame(self, time: float) -> Image.Image:
         output = self.style.output
-        image = Image.new("RGBA", (output.width, output.height), output.background)
+        image = base_frame(
+            self.style.background, (output.width, output.height), output.background
+        )
         cue = self.cue_at(time)
         if cue is None:
             return image

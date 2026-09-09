@@ -26,6 +26,7 @@ from pydantic.dataclasses import dataclass
 Anchor = Literal["top", "center", "bottom"]
 OutputFormat = Literal["mp4", "prores4444", "animation", "png_mov", "png"]
 BallKind = Literal["ball", "sprite", "none"]
+Fit = Literal["cover", "contain", "stretch"]
 TransitionKind = Literal["fade", "cut"]
 
 _HEX = re.compile(r"^#?(?P<digits>[0-9a-fA-F]{3,8})$")
@@ -134,6 +135,49 @@ class Shadow:
         le=100.0,
         description="Softness in pixels. Empty scales with the text; 0 is a hard shadow.",
     )
+
+
+@dataclass(frozen=True)
+class Background:
+    """What sits behind the words.
+
+    A still or a clip, for when the video is the finished thing rather than an
+    overlay to drop onto something else. Both cannot be set at once, and either
+    one means the output has something in every pixel — a transparent export
+    with a picture behind it is a contradiction, so `render` says so instead of
+    quietly flattening it.
+    """
+
+    image: str | None = Field(
+        default=None, description="A still behind the words. Any format Pillow reads."
+    )
+    video: str | None = Field(
+        default=None, description="A clip behind the words. Composited when encoding."
+    )
+    loop: bool = Field(
+        default=True,
+        description="Repeat a clip shorter than the song. Off leaves the last frame standing.",
+    )
+    fit: Fit = Field(
+        default="cover",
+        description=(
+            "cover fills the frame and crops the overflow, contain fits the whole "
+            "picture inside it, stretch distorts to match exactly."
+        ),
+    )
+    dim: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Darken it by this much so the words stay readable. 0.35 is enough for "
+            "most photographs; a busy one wants an outline or a shadow as well."
+        ),
+    )
+
+    def __post_init__(self) -> None:
+        if self.image and self.video:
+            raise ValueError("give a background image or a video, not both")
 
 
 def resolved_shadow(shadow: Shadow, size: int) -> tuple[float, float, float]:
@@ -450,6 +494,7 @@ class Style:
     )
     ball: BallStyle = field(default_factory=BallStyle)
     shadow: Shadow = field(default_factory=Shadow)
+    background: Background = field(default_factory=Background)
 
     def voice_style(self, voice: str) -> TextStyle:
         """The text style for a voice, with the second voice's overrides applied.

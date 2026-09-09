@@ -317,6 +317,39 @@ circle again puts the sprite back down.
 The circle has settings of its own: `[ball] colour` and `radius`, both in the
 dialog. `kind = "none"` draws nothing at all, for when the words are enough.
 
+## Something behind the words
+
+A still or a clip, for when the video is the finished thing rather than an
+overlay to drop onto something else.
+
+```bash
+videokar render song.json --behind photo.jpg --dim 0.4
+videokar render song.json --behind loop.mp4
+```
+
+The suffix decides which it is. A still is fitted and darkened once and every
+frame starts from it; a clip is composited by ffmpeg while encoding, because
+ffmpeg is already in the pipeline and pulling video frames into Pillow one at a
+time would be the slow way round.
+
+```toml
+[background]
+image = "photo.jpg"   # or video = "loop.mp4", never both
+loop = true           # repeat a clip shorter than the song
+fit = "cover"         # cover crops, contain pads, stretch distorts
+dim = 0.35            # darken it so the words stay readable
+```
+
+A clip shorter than the song repeats, and keeps repeating across a segment
+boundary rather than restarting at it — the offset is taken with ffmpeg's
+`trim` rather than by seeking, because seeking into a stream that is also being
+looped does not land where the arithmetic says, and the drift only shows up
+minutes in.
+
+A background and a transparent export contradict each other, so `alpha` with
+either one is refused before the render rather than after it. Use `youtube`,
+`shorts`, or `--opaque`.
+
 ```bash
 videokar sprite paw.png --scale 3
 ```
