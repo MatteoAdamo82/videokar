@@ -1,6 +1,6 @@
 # videokar
 
-[![ci](https://github.com/matteoadamo/videokar/actions/workflows/ci.yml/badge.svg)](https://github.com/matteoadamo/videokar/actions/workflows/ci.yml)
+[![ci](https://github.com/MatteoAdamo82/videokar/actions/workflows/ci.yml/badge.svg)](https://github.com/MatteoAdamo82/videokar/actions/workflows/ci.yml)
 
 Bouncing-ball karaoke lyric videos from an audio track and its lyrics.
 
