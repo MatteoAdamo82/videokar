@@ -584,9 +584,16 @@ def test_the_fonts_this_machine_offers_are_listed(client):
 
 
 def test_a_font_can_be_used_in_the_preview(client):
+    from videokar.render.fonts import resolve_font_path
+
+    # Any font but the one used when none is chosen — otherwise the two frames
+    # are the same for the right reason. On Linux the first font in the list is
+    # DejaVu Sans Bold, which is exactly that default.
+    default = resolve_font_path(None).resolve()
     fonts = client.get("/api/fonts").json()["fonts"]
+    other = next(f for f in fonts if Path(f["path"]).resolve() != default)
     plain = client.get("/api/frame", params={"at": 20.5}).content
-    styled = client.get("/api/frame", params={"at": 20.5, "font": fonts[0]["path"]}).content
+    styled = client.get("/api/frame", params={"at": 20.5, "font": other["path"]}).content
     assert plain != styled
 
 

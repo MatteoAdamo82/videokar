@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from videokar.render.fonts import (
@@ -61,3 +63,59 @@ def test_a_font_in_the_working_folder_wins_over_the_system_copy(tmp_path, a_real
 def test_a_missing_font_file_says_so(tmp_path):
     with pytest.raises(FontError, match="not found"):
         resolve_font_path(str(tmp_path / "nope.ttf"))
+
+
+def test_fonts_in_folders_under_a_system_folder_are_found(a_real_font, tmp_path, monkeypatch):
+    # How Linux lays them out: /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf.
+    # Reading only the top level found nothing there, and left the dialog's
+    # font list empty on every Linux machine.
+    import shutil
+
+    from videokar.render import fonts
+
+    nested = tmp_path / "share" / "fonts" / "truetype" / "somefamily"
+    nested.mkdir(parents=True)
+    shutil.copy(a_real_font.path, nested / "Face.ttf")
+    monkeypatch.setattr(fonts, "FONT_DIRECTORIES", (str(tmp_path / "share" / "fonts"),))
+    fonts._scan.cache_clear()
+    try:
+        found = fonts.available_fonts()
+    finally:
+        fonts._scan.cache_clear()
+    assert [Path(f.path).name for f in found] == ["Face.ttf"]
+
+
+def test_the_working_folder_is_read_flat(a_real_font, tmp_path, monkeypatch):
+    # A font put next to the song on purpose sits at the top. One that has been
+    # moved into .trash, or is buried in some render's folder, is not on offer.
+    import shutil
+
+    from videokar.render import fonts
+
+    shutil.copy(a_real_font.path, tmp_path / "Chosen.ttf")
+    (tmp_path / ".trash").mkdir()
+    shutil.copy(a_real_font.path, tmp_path / ".trash" / "Discarded.ttf")
+    (tmp_path / "renders").mkdir()
+    shutil.copy(a_real_font.path, tmp_path / "renders" / "Buried.ttf")
+    monkeypatch.setattr(fonts, "FONT_DIRECTORIES", ())
+    fonts._scan.cache_clear()
+    try:
+        found = fonts.available_fonts(tmp_path)
+    finally:
+        fonts._scan.cache_clear()
+    assert [Path(f.path).name for f in found] == ["Chosen.ttf"]
+
+
+def test_hidden_folders_are_passed_over(a_real_font, tmp_path, monkeypatch):
+    import shutil
+
+    from videokar.render import fonts
+
+    (tmp_path / "fonts" / ".cache").mkdir(parents=True)
+    shutil.copy(a_real_font.path, tmp_path / "fonts" / ".cache" / "Hidden.ttf")
+    monkeypatch.setattr(fonts, "FONT_DIRECTORIES", (str(tmp_path / "fonts"),))
+    fonts._scan.cache_clear()
+    try:
+        assert fonts.available_fonts() == []
+    finally:
+        fonts._scan.cache_clear()

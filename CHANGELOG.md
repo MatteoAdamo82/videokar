@@ -435,6 +435,10 @@ All notable changes to this project are documented here. The format follows
   themselves at import when torch is missing, and a module has to be imported
   for its marker to be read, so `-m "not integration"` still reported them as
   skipped and would have tripped the no-skips check on its own.
-- The Linux CI runner has no fonts, so three web tests failed and the font
-  tests skipped. It installs `fonts-dejavu-core` now — the default the renderer
-  reaches for on Linux — and the README says a minimal Linux system needs it.
+- The font list was empty on every Linux machine. The scan read only the top
+  level of each font folder, which on a Mac is where the fonts are and on Linux
+  is not — there they sit one folder per package, under
+  `/usr/share/fonts/truetype/` and the like. It recurses now, except into the
+  working folder, which stays flat so a font moved into `.trash` is not offered.
+  Found by the first Linux CI run; an earlier commit blamed the runner for
+  having no fonts, which was wrong — DejaVu was installed all along.

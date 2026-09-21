@@ -42,7 +42,6 @@ def resolve_font_path(candidate: str | None) -> Path:
 # the caller, so a font dropped next to the song is offered like any other.
 FONT_DIRECTORIES = (
     "/System/Library/Fonts",
-    "/System/Library/Fonts/Supplemental",
     "/Library/Fonts",
     "~/Library/Fonts",
     "/usr/share/fonts",
@@ -78,12 +77,23 @@ def describe_font(path: Path) -> FontFile | None:
 
 
 @lru_cache(maxsize=8)
-def _scan(directory: str) -> tuple[FontFile, ...]:
+def _scan(directory: str, recursive: bool = True) -> tuple[FontFile, ...]:
+    """The fonts in a folder, and by default in the folders under it.
+
+    Recursive because that is how Linux lays fonts out — one folder per
+    package, under /usr/share/fonts/truetype/ and friends. Reading only the top
+    level found every font on a Mac, where they sit flat, and none at all on
+    Linux, which left the dialog's font list empty there. Hidden folders are
+    passed over: nothing in one is meant to be offered.
+    """
     folder = Path(directory).expanduser()
     if not folder.is_dir():
         return ()
+    candidates = folder.rglob("*") if recursive else folder.iterdir()
     found = []
-    for path in sorted(folder.iterdir()):
+    for path in sorted(candidates):
+        if any(part.startswith(".") for part in path.relative_to(folder).parts[:-1]):
+            continue
         if path.suffix.lower() in FONT_SUFFIXES and (described := describe_font(path)):
             found.append(described)
     return tuple(found)
@@ -98,9 +108,11 @@ def available_fonts(extra: Path | None = None) -> list[FontFile]:
     seen: dict[str, FontFile] = {}
     # The working folder first: two files can carry the same family name, and a
     # font deliberately put next to the song should win over the system's copy.
-    directories = ([str(extra)] if extra else []) + [*FONT_DIRECTORIES]
-    for directory in directories:
-        for font in _scan(directory):
+    # The working folder is read flat: a font put there on purpose sits at the
+    # top, and one that has been moved into .trash is not being offered.
+    scans = ([(str(extra), False)] if extra else []) + [(d, True) for d in FONT_DIRECTORIES]
+    for directory, recursive in scans:
+        for font in _scan(directory, recursive):
             # Apple names its internal fallback faces with a leading dot and
             # does not mean them to be set in; offering them is just noise.
             if font.family.startswith("."):
