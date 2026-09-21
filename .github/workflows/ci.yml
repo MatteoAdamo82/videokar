@@ -30,9 +30,12 @@ jobs:
       # The encoder is a program on PATH, and the tests that drive it skip
       # themselves when it is missing — which would quietly leave the whole
       # encoding side untested.
-      - name: ffmpeg (linux)
+      # The Linux runner has no fonts at all. DejaVu is the default the renderer
+      # reaches for there, and without it the text is drawn in Pillow's bitmap
+      # fallback and the font tests skip — which the check below would refuse.
+      - name: ffmpeg and a font (linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core
       - name: ffmpeg (macos)
         if: runner.os == 'macOS'
         run: brew install ffmpeg

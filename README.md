@@ -28,6 +28,13 @@ brew install ffmpeg
 pipx install "videokar[all]"
 ```
 
+On Linux, install a font as well — a minimal system can have none, and the text
+then falls back to Pillow's small bitmap face:
+
+```bash
+sudo apt-get install ffmpeg fonts-dejavu-core
+```
+
 The heavy ML wheels (torch, torchaudio, demucs, faster-whisper) live in extras.
 `pipx install videokar` gives you lyrics parsing and rendering only; `[all]`
 adds separation, alignment and transcription.
@@ -565,11 +572,11 @@ uv run pytest
 uv run ruff check .
 ```
 
-CI runs both on Linux and macOS, with ffmpeg installed so the encoder is
-actually exercised, and fails if anything in the non-integration set *skips* —
-a test that quietly stopped running is worse than one that fails. The
-integration tests need the align extra and the author's own audio, so they are
-not run there.
+CI runs both on Linux and macOS, with ffmpeg and a font installed so the
+encoder and the text are actually exercised, and fails if anything in the
+non-integration set *skips* — a test that quietly stopped running is worse than
+one that fails. The integration tests need the align extra and the author's own
+audio, so they are not run there.
 
 ```
 src/videokar/
