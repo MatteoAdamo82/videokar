@@ -425,3 +425,13 @@ All notable changes to this project are documented here. The format follows
 - The preview is fetched rather than assigned to an `<img>` src, which is what
   makes the boxes readable — and means a refusal arrives with its reason
   instead of as a broken image.
+
+- The web tests never declared what drives Starlette's test client. They ran
+  here because `httpx` arrived with other extras, and failed at collection on
+  the first CI run, where only the web extra is installed. `httpx2` — the one
+  Starlette now asks for — is in the dev group, which also retires the
+  deprecation warning every local run printed.
+- CI leaves the integration tests out by path rather than by marker. They skip
+  themselves at import when torch is missing, and a module has to be imported
+  for its marker to be read, so `-m "not integration"` still reported them as
+  skipped and would have tripped the no-skips check on its own.

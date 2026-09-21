@@ -50,10 +50,14 @@ jobs:
       # running is worse than one that fails, and every skip in this project is
       # conditional on something — ffmpeg, the web extra — that is installed
       # above precisely so it does not skip.
+      #
+      # The integration tests are left out by path, not by marker: they skip
+      # themselves at import when torch is missing, and a module is imported to
+      # read its marker, so -m alone still reports them as skipped.
       - name: tests
         run: |
           set -o pipefail
-          uv run pytest -q -rs -m "not integration" | tee report.txt
+          uv run pytest -q -rs --ignore=tests/integration | tee report.txt
           if grep -q SKIPPED report.txt; then
             echo "::error::nothing in this set should skip"
             grep SKIPPED report.txt

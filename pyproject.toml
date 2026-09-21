@@ -56,7 +56,12 @@ Issues = "https://github.com/MatteoAdamo82/videokar/issues"
 videokar = "videokar.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8.2", "pytest-cov>=5.0", "ruff>=0.5"]
+dev = [
+    "httpx2>=2.13.0",
+    "pytest>=8.2",
+    "pytest-cov>=5.0",
+    "ruff>=0.5",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/videokar"]
